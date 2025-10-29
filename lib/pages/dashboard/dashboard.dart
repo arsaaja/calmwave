@@ -1,5 +1,6 @@
 import 'package:calm_wave/common/widget/category_tabs.dart';
 import 'package:calm_wave/common/widget/custom_appbar.dart';
+import 'package:calm_wave/pages/sound/sound_player.dart';
 import 'package:flutter/material.dart';
 
 class Dashboard extends StatefulWidget {
@@ -23,23 +24,27 @@ class _DashboardState extends State<Dashboard> {
       ),
       body: Column(
         children: [
-          const SizedBox(height: 37),
+          const SizedBox(height: 20),
+
           CategoryTabs(
             categories: _categories,
             onChanged: (index) {
               setState(() => selectedIndex = index);
-              debugPrint("Kategori dipilih: ${_categories[index]}");
             },
           ),
-          // Tambahkan grid / konten di bawah ini
+
+          const SizedBox(height: 20),
+
           Expanded(
             child: Center(
               child: Text(
                 "Konten kategori: ${_categories[selectedIndex]}",
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
             ),
           ),
+
+          const SoundPlayer(),
         ],
       ),
     );

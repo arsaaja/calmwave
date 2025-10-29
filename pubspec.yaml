@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   supabase_flutter: ^2.10.3
   just_audio: ^0.10.5
+  circular_countdown_timer: ^0.2.4
 
 dev_dependencies:
   flutter_test:
