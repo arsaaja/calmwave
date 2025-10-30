@@ -35,7 +35,7 @@ class LoginPage extends StatelessWidget {
                 // Tombol Login
                 ElevatedButton(
                   onPressed: () {
-                    Navigator.pushNamed(context, '/home');
+                    Navigator.pushNamed(context, '/tab_bar');
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1B1A55),

@@ -1,27 +1,31 @@
 import 'package:just_audio/just_audio.dart';
 
 class AudioManager {
-  final AudioPlayer _player = AudioPlayer();
+  AudioManager._internal();
 
-  AudioPlayer get player => _player;
+  static final AudioManager _instance = AudioManager._internal();
 
-  Future<void> setAudio(String path) async {
-    await _player.setAsset(path); // misalnya dari assets/audio/suara.mp3
-  }
+  static AudioManager get instance => _instance;
 
-  Future<void> playPause() async {
-    if (_player.playing) {
-      await _player.pause();
-    } else {
-      await _player.play();
+  final player = AudioPlayer();
+
+  Future<void> setAudio(String assetPath) async {
+    try {
+      await player.setAsset(assetPath);
+    } catch (e) {
+      print("Error loading audio asset: $e");
     }
   }
 
-  void seekTo(Duration position) {
-    _player.seek(position);
+  void playPause() {
+    if (player.playing) {
+      player.pause();
+    } else {
+      player.play();
+    }
   }
 
   void dispose() {
-    _player.dispose();
+    player.dispose();
   }
 }

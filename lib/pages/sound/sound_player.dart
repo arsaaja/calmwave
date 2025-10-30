@@ -1,5 +1,5 @@
+import 'package:calm_wave/pages/sound/audio_manager.dart'; // <- IMPORT PENTING
 import 'package:flutter/material.dart';
-import 'audio_manager.dart';
 
 class SoundPlayer extends StatefulWidget {
   const SoundPlayer({super.key});
@@ -9,142 +9,153 @@ class SoundPlayer extends StatefulWidget {
 }
 
 class _SoundPlayerState extends State<SoundPlayer> {
-  late final AudioManager audioManager;
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
-  bool _isMuted = false;
-  double _previousVolume = 1.0;
-  double _volume = 1.0; // volume default 100%
+  final AudioManager _audioManager = AudioManager.instance;
+
+  bool isPlaying = false;
+  bool isBookmarked = false;
+  bool isMuted = false;
+  double volume = 0.5;
+
+  final String audioUrl =
+      'https://vioeocsssqihgkbjuucm.supabase.co/storage/v1/object/public/sounds/sounds/rain-and-thunder-for-better-sleep-148899.mp3';
 
   @override
   void initState() {
     super.initState();
-    audioManager = AudioManager();
-    _initializeAudio();
+    _initPlayer();
   }
 
-  Future<void> _initializeAudio() async {
-    await audioManager.setAudio('assets/audio/sample.mp3');
-
-    // durasi lagu
-    audioManager.player.durationStream.listen((d) {
-      if (d != null) setState(() => _duration = d);
-    });
-
-    // posisi lagu
-    audioManager.player.positionStream.listen((p) {
-      setState(() => _position = p);
-    });
-  }
-
-  void _toggleMute() {
-    setState(() {
-      if (_isMuted) {
-        // Kembali ke volume sebelumnya
-        audioManager.player.setVolume(_previousVolume);
-        _isMuted = false;
-        _volume = _previousVolume;
-      } else {
-        // Menyimpen volume lama dan set jadi 0
-        _previousVolume = _volume;
-        audioManager.player.setVolume(0);
-        _isMuted = true;
-        _volume = 0;
+  Future<void> _initPlayer() async {
+    try {
+      if (_audioManager.player.audioSource == null) {
+        await _audioManager.player.setUrl(audioUrl);
       }
-    });
+
+      setState(() {
+        isPlaying = _audioManager.player.playing;
+        volume = _audioManager.player.volume;
+        isMuted = volume == 0;
+      });
+
+      _audioManager.player.playingStream.listen((playing) {
+        if (mounted) {
+          setState(() => isPlaying = playing);
+        }
+      });
+
+      _audioManager.player.volumeStream.listen((currentVolume) {
+        if (mounted) {
+          setState(() {
+            volume = currentVolume;
+            isMuted = currentVolume == 0;
+          });
+        }
+      });
+    } catch (e) {
+      debugPrint("Gagal memuat audio: $e");
+    }
   }
 
-  String _formatDuration(Duration d) {
-    final minutes = d.inMinutes.remainder(60);
-    final seconds = d.inSeconds.remainder(60);
-    return "${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}";
+  Future<void> _togglePlay() async {
+    if (_audioManager.player.playing) {
+      await _audioManager.player.pause();
+    } else {
+      await _audioManager.player.play();
+    }
+  }
+
+  Future<void> _toggleMute() async {
+    final newMuteState = !isMuted;
+    if (newMuteState) {
+      await _audioManager.player.setVolume(0);
+    } else {
+      double newVolume = volume > 0 ? volume : 0.5;
+      await _audioManager.player.setVolume(newVolume);
+    }
+    setState(() {
+      isMuted = newMuteState;
+    });
   }
 
   @override
   void dispose() {
-    audioManager.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Container(
-        height: 55,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        margin: const EdgeInsets.only(bottom: 45, left: 12, right: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xff535C91),
-          borderRadius: BorderRadius.circular(25),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-              offset: Offset(0, 3),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      height: 42,
+      decoration: BoxDecoration(
+        color: const Color(0xFF535C91),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          // Tombol Play/Pause
+          IconButton(
+            onPressed: _togglePlay,
+            icon: Icon(
+              isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              color: Colors.white,
+              size: 22,
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Tombol Play / Pause
-            IconButton(
-              icon: Icon(
-                audioManager.player.playing ? Icons.pause : Icons.play_arrow,
-                color: Colors.white,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          const SizedBox(width: 6),
+          // Tombol Mute/Unmute
+          IconButton(
+            onPressed: _toggleMute,
+            icon: Icon(
+              isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          const SizedBox(width: 6),
+          // Volume Bar (Slider)
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                trackHeight: 4,
+                overlayShape: SliderComponentShape.noOverlay,
               ),
-              iconSize: 30,
-              onPressed: () => audioManager.playPause(),
-            ),
-
-            // Tombol Mute / Unmute
-            IconButton(
-              icon: Icon(
-                _isMuted ? Icons.volume_off : Icons.volume_up_rounded,
-                color: Colors.white,
-              ),
-              iconSize: 25,
-              onPressed: _toggleMute,
-            ),
-
-            // Slider Volume
-            Expanded(
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 2,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 4,
-                  ),
-                ),
-                child: Slider(
-                  value: _volume,
-                  min: 0.0,
-                  max: 1.0,
-                  divisions: 10,
-                  label: '${(_volume * 100).toInt()}%',
-                  activeColor: const Color(0xFF0A0A3F),
-                  inactiveColor: Colors.white,
-                  onChanged: (value) {
-                    setState(() {
-                      _volume = value;
-                      _isMuted = value == 0;
-                    });
-                    audioManager.player.setVolume(value);
-                  },
-                ),
+              child: Slider(
+                value: volume, // Nilai slider langsung dari state
+                min: 0,
+                max: 1,
+                onChanged: (v) async {
+                  // Langsung set volume ke player global
+                  await _audioManager.player.setVolume(v);
+                },
+                activeColor: const Color(0xFF0A0A3F),
+                inactiveColor: Colors.white70,
               ),
             ),
-
-            // Tombol Playlist
-            IconButton(
-              icon: const Icon(Icons.bookmark_add, color: Colors.white),
-              iconSize: 25,
-              onPressed: () {
-                // Tambahkan pop up nanti
-              },
+          ),
+          const SizedBox(width: 6),
+          // Tombol Playlist
+          IconButton(
+            onPressed: () {
+              setState(() => isBookmarked = !isBookmarked);
+            },
+            icon: Icon(
+              isBookmarked
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_border_rounded,
+              color: Colors.white,
+              size: 20,
             ),
-          ],
-        ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
       ),
     );
   }

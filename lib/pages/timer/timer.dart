@@ -1,5 +1,5 @@
 import 'package:calm_wave/common/widget/custom_appbar.dart';
-import 'package:calm_wave/pages/sound/audio_manager.dart';
+import 'package:calm_wave/pages/sound/audio_manager.dart'; // <- IMPORT PENTING
 import 'package:circular_countdown_timer/circular_countdown_timer.dart';
 import 'package:flutter/material.dart';
 
@@ -14,15 +14,18 @@ class _TimerState extends State<Timer> {
   final CountDownController _controller = CountDownController();
   final TextEditingController _inputController = TextEditingController();
 
+  // --- PERUBAHAN UTAMA ---
+  // Dapatkan satu-satunya instance AudioManager, bukan membuat yang baru.
+  final AudioManager _audioManager = AudioManager.instance;
+
   bool _isRunning = false;
   bool _isPaused = false;
   int _duration = 0;
-  late AudioManager _audioManager;
 
   @override
   void initState() {
     super.initState();
-    _audioManager = AudioManager();
+    // Tidak perlu lagi membuat instance AudioManager di sini.
   }
 
   @override
@@ -32,8 +35,20 @@ class _TimerState extends State<Timer> {
   }
 
   void _startTimer() {
+    // Sembunyikan keyboard saat timer dimulai
+    FocusScope.of(context).unfocus();
+
     final int? minutes = int.tryParse(_inputController.text);
-    if (minutes == null || minutes <= 0) return;
+    if (minutes == null || minutes <= 0) {
+      // Tampilkan pesan jika input tidak valid
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Masukkan jumlah menit yang valid.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
 
     final int durationInSeconds = minutes * 60;
 
@@ -66,7 +81,9 @@ class _TimerState extends State<Timer> {
     });
   }
 
+  // Fungsi ini sekarang akan bekerja dengan benar.
   void _onTimerComplete() {
+    // Cek apakah player dari AudioManager sedang berjalan
     if (_audioManager.player.playing) {
       _audioManager.player.pause();
     }
@@ -75,6 +92,14 @@ class _TimerState extends State<Timer> {
       _isPaused = false;
       _duration = 0;
     });
+
+    // Beri notifikasi kepada pengguna
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Waktu habis! Audio telah dijeda.'),
+        backgroundColor: Color(0xFF535C91),
+      ),
+    );
   }
 
   @override
@@ -100,10 +125,8 @@ class _TimerState extends State<Timer> {
                 ),
               ),
               const SizedBox(height: 24),
-
               const Icon(Icons.access_time, color: Colors.white, size: 60),
               const SizedBox(height: 24),
-
               const Text(
                 "Set your Relaxation Time",
                 style: TextStyle(
@@ -113,8 +136,6 @@ class _TimerState extends State<Timer> {
                 ),
               ),
               const SizedBox(height: 30),
-
-              // Input field
               Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFF161E54),
@@ -134,17 +155,12 @@ class _TimerState extends State<Timer> {
                   style: const TextStyle(color: Colors.white, fontSize: 18),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               Text(
                 "Adjust Time: ${_inputController.text.isEmpty ? 0 : _inputController.text} minutes",
                 style: const TextStyle(color: Colors.white70),
               ),
-
               const SizedBox(height: 40),
-
-              // Circular Timer
               CircularCountDownTimer(
                 duration: _duration,
                 initialDuration: 0,
@@ -166,10 +182,7 @@ class _TimerState extends State<Timer> {
                 isTimerTextShown: true,
                 onComplete: _onTimerComplete,
               ),
-
               const SizedBox(height: 40),
-
-              // Buttons
               if (!_isRunning)
                 ElevatedButton.icon(
                   onPressed: _startTimer,

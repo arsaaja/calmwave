@@ -1,41 +1,40 @@
 import 'package:calm_wave/pages/dashboard/dashboard.dart';
-import 'package:calm_wave/pages/playlist/playlist.dart';
+import 'package:calm_wave/pages/playlist/playlist.dart'; // <- IMPORT PENTING
 import 'package:calm_wave/pages/profile/profile.dart';
 import 'package:calm_wave/pages/timer/timer.dart';
 import 'package:flutter/material.dart';
 
-class Home extends StatefulWidget {
-  const Home({super.key});
+class CustomTabBar extends StatefulWidget {
+  const CustomTabBar({super.key});
 
   @override
-  State<Home> createState() => _HomeState();
+  State<CustomTabBar> createState() => _CustomTabBarState();
 }
 
-class _HomeState extends State<Home> {
+class _CustomTabBarState extends State<CustomTabBar> {
   int currentTab = 0;
-  final List<Widget> screen = [Dashboard(), Playlist(), Timer(), Profile()];
 
-  final PageStorageBucket bucket = PageStorageBucket();
-  Widget currentScreen = Dashboard();
+  // Daftarnya Halaman
+  final List<Widget> screens = [Dashboard(), Playlist(), Timer(), Profile()];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF070F2B), // warna Background
-      body: PageStorage(bucket: bucket, child: currentScreen),
+      backgroundColor: const Color(0xFF070F2B),
+
+      body: IndexedStack(index: currentTab, children: screens),
 
       // Floating Play Button
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xff3D447C),
         elevation: 6,
         shape: const CircleBorder(),
-        onPressed: () {
-          Navigator.pushNamed(context, '/sound_player');
-        },
+        onPressed: () {},
         child: const Icon(Icons.play_arrow, size: 36, color: Colors.white),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
+      // BottomAppBar
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 8,
@@ -47,7 +46,7 @@ class _HomeState extends State<Home> {
             children: [
               _buildTabButton(Icons.home_rounded, 0),
               _buildTabButton(Icons.bookmark_rounded, 1),
-              const SizedBox(width: 40), // ruang untuk FAB
+              const SizedBox(width: 40),
               _buildTabButton(Icons.access_time_rounded, 2),
               _buildTabButton(Icons.person_rounded, 3),
             ],
@@ -63,7 +62,6 @@ class _HomeState extends State<Home> {
       minWidth: 40,
       onPressed: () {
         setState(() {
-          currentScreen = screen[index];
           currentTab = index;
         });
       },

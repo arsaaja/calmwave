@@ -32,8 +32,11 @@ class MyApp extends StatelessWidget {
       routes: {
         '/signup': (context) => const SignupPage(),
         '/login': (context) => const LoginPage(),
-        '/home': (context) => const Home(),
-        '/sound_player': (context) => const SoundPlayer(),
+        '/tab_bar': (context) => const CustomTabBar(),
+        '/sound_player': (context) => const Scaffold(
+          backgroundColor: Color(0xFF070F2B),
+          body: SafeArea(child: SoundPlayer()),
+        ),
       },
     );
   }
