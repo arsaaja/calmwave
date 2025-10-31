@@ -1,8 +1,58 @@
+import 'package:calm_wave/common/auth/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:calm_wave/common/widget/app_card.dart';
 
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final authService = AuthService();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  bool _isLoading = false;
+
+  Future<void> login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Email dan password tidak boleh kosong")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await authService.signInWithEmailPassword(email, password);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context);
+        Navigator.pushReplacementNamed(context, '/tab_bar');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,32 +61,29 @@ class LoginPage extends StatelessWidget {
       body: Center(
         child: SingleChildScrollView(
           child: AppCard(
-            // Login card
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Logo
-                Column(
-                  children: [
-                    Image.asset('assets/images/logo.png', height: 150),
-                  ],
-                ),
+                Image.asset('assets/images/logo.png', height: 150),
 
                 const SizedBox(height: 30),
 
                 // Email
-                _buildTextField("Email"),
+                _buildTextField("Email", controller: _emailController),
                 const SizedBox(height: 12),
 
                 // Password
-                _buildTextField("Password", obscure: true),
-                const SizedBox(height: 12),
+                _buildTextField(
+                  "Password",
+                  controller: _passwordController,
+                  //obscure: true,
+                ),
+                const SizedBox(height: 20),
 
                 // Tombol Login
                 ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/tab_bar');
-                  },
+                  onPressed: _isLoading ? null : login,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1B1A55),
                     minimumSize: const Size(double.infinity, 48),
@@ -44,19 +91,21 @@ class LoginPage extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  child: const Text(
-                    "Login",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          "Login",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
                 ),
 
                 const SizedBox(height: 15),
 
-                // Sudah punya akun?
+                // Belum punya akun?
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -87,8 +136,13 @@ class LoginPage extends StatelessWidget {
     );
   }
 
-  Widget _buildTextField(String hint, {bool obscure = false}) {
+  Widget _buildTextField(
+    String hint, {
+    bool obscure = false,
+    TextEditingController? controller,
+  }) {
     return TextFormField(
+      controller: controller,
       obscureText: obscure,
       decoration: InputDecoration(
         hintText: hint,
