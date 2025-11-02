@@ -1,5 +1,5 @@
 import 'package:calm_wave/pages/login.dart';
-import 'package:calm_wave/pages/profile.dart';
+import 'package:calm_wave/pages/profile/profile.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -18,7 +18,7 @@ class AuthGate extends StatelessWidget {
         }
         final session = snapshot.hasData ? snapshot.data!.session : null;
         if (session != null) {
-          return ProfilePage();
+          return Profile();
         } else {
           return LoginPage();
         }
