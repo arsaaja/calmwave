@@ -280,10 +280,19 @@ class _SoundPlayerState extends State<SoundPlayer> {
             icon: Icon(
               isPlaying ? Icons.pause : Icons.play_arrow,
               color: Colors.white,
-              size: 40,
+              size: 30,
             ),
           ),
           const SizedBox(width: 8),
+
+          // Tombol Mute
+          IconButton(
+            onPressed: _toggleMute,
+            icon: Icon(
+              isMuted ? Icons.volume_off : Icons.volume_up,
+              color: Colors.white,
+            ),
+          ),
 
           // Slider Volume
           Expanded(
@@ -298,15 +307,6 @@ class _SoundPlayerState extends State<SoundPlayer> {
                   isMuted = value == 0;
                 });
               },
-            ),
-          ),
-
-          // Tombol Mute
-          IconButton(
-            onPressed: _toggleMute,
-            icon: Icon(
-              isMuted ? Icons.volume_off : Icons.volume_up,
-              color: Colors.white,
             ),
           ),
 

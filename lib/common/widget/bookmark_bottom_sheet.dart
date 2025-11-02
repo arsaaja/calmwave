@@ -1,163 +1,80 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class SoundBookmarkButton extends StatefulWidget {
-  final String soundId; // ID dari sound yang sedang ditampilkan/diputar
-
-  const SoundBookmarkButton({super.key, required this.soundId});
+class PlaylistPage extends StatefulWidget {
+  const PlaylistPage({super.key});
 
   @override
-  State<SoundBookmarkButton> createState() => _SoundBookmarkButtonState();
+  State<PlaylistPage> createState() => _PlaylistPageState();
 }
 
-class _SoundBookmarkButtonState extends State<SoundBookmarkButton> {
-  // Instance Supabase client untuk berinteraksi dengan database
+class _PlaylistPageState extends State<PlaylistPage> {
   final SupabaseClient supabase = Supabase.instance.client;
+  List<dynamic> _playlists = [];
+  bool _isLoading = true;
 
-  /// Menampilkan bottom sheet yang berisi daftar playlist milik pengguna.
-  Future<void> _showPlaylistBottomSheet(BuildContext context) async {
-    // Pastikan user sudah login sebelum melanjutkan
+  @override
+  void initState() {
+    super.initState();
+    _fetchPlaylists();
+  }
+
+  Future<void> _fetchPlaylists() async {
     final user = supabase.auth.currentUser;
     if (user == null) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Harap login terlebih dahulu untuk menyimpan sound.'),
-        ),
-      );
+      setState(() {
+        _isLoading = false;
+      });
       return;
     }
 
     try {
-      // Ambil semua playlist yang dimiliki oleh user yang sedang login
-      final playlists = await supabase
+      final response = await supabase
           .from('playlist')
-          .select('id, nama_playlist') // Mengambil ID dan nama playlist
-          .eq('user_id', user.id);
+          .select('id, nama_playlist')
+          .eq('user_id', user.id)
+          .order('nama_playlist', ascending: true);
 
-      if (!context.mounted) return;
-
-      if (playlists.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Anda belum memiliki playlist. Buat satu terlebih dahulu!',
-            ),
-          ),
-        );
-        return;
-      }
-
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: const Color(0xFF101046),
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (BuildContext innerContext) {
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  "Tambahkan ke Playlist",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: playlists.length,
-                  itemBuilder: (context, index) {
-                    final playlist = playlists[index];
-                    return Card(
-                      color: const Color(0xFF1C1C5A),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      child: ListTile(
-                        title: Text(
-                          playlist['nama_playlist'],
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        onTap: () async {
-                          Navigator.pop(innerContext);
-                          await _addSoundToPlaylist(
-                            playlistId: playlist['id'],
-                            soundId: widget.soundId,
-                            playlistName: playlist['nama_playlist'],
-                          );
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          );
-        },
-      );
+      setState(() {
+        _playlists = response;
+        _isLoading = false;
+      });
     } catch (error) {
-      if (!context.mounted) return;
+      debugPrint('Gagal memuat playlist: $error');
+      setState(() {
+        _isLoading = false;
+      });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Gagal memuat playlist. Coba lagi nanti.'),
+          content: Text('Gagal memuat daftar playlist.'),
           backgroundColor: Colors.red,
         ),
       );
     }
   }
 
-  Future<void> _addSoundToPlaylist({
-    required int playlistId,
-    required String soundId,
-    required String playlistName,
-  }) async {
+  Future<void> _deletePlaylist(int playlistId, String name) async {
     try {
-      final existing = await supabase
-          .from('playlist_sound')
-          .select()
-          .eq('id_playlist', playlistId)
-          .eq('id_sounds', soundId)
-          .maybeSingle();
+      await supabase.from('playlist').delete().eq('id', playlistId);
 
-      if (!context.mounted) return;
-
-      if (existing != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Sound ini sudah ada di playlist "$playlistName".'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      await supabase.from('playlist_sound').insert({
-        'id_playlist': playlistId,
-        'id_sounds': soundId,
+      setState(() {
+        _playlists.removeWhere((p) => p['id'] == playlistId);
       });
 
-      if (!context.mounted) return;
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Berhasil menambahkan ke playlist "$playlistName".'),
+          content: Text('Playlist "$name" berhasil dihapus.'),
           backgroundColor: Colors.green,
         ),
       );
     } catch (error) {
-      debugPrint('Error saat menambahkan sound ke playlist: $error');
-      if (!context.mounted) return;
+      debugPrint('Gagal hapus playlist: $error');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Gagal menambahkan sound. Terjadi kesalahan.'),
+          content: Text('Gagal menghapus playlist.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -166,14 +83,76 @@ class _SoundBookmarkButtonState extends State<SoundBookmarkButton> {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      icon: const Icon(
-        Icons.bookmark_add_outlined,
-        color: Colors.white,
-        size: 30,
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF101046),
+        body: Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
+    }
+
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF101046),
+        body: Center(
+          child: Text(
+            'Silakan login untuk melihat playlist Anda.',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF101046),
+      appBar: AppBar(
+        title: const Text(
+          'Playlist Saya',
+          style: TextStyle(color: Colors.white),
+        ),
+        backgroundColor: const Color(0xFF1C1C5A),
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      tooltip: 'Tambahkan ke playlist',
-      onPressed: () => _showPlaylistBottomSheet(context),
+      body: _playlists.isEmpty
+          ? const Center(
+              child: Text(
+                'Belum ada playlist. Buat satu untuk mulai menyimpan sound!',
+                style: TextStyle(color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _playlists.length,
+              itemBuilder: (context, index) {
+                final playlist = _playlists[index];
+                return Card(
+                  color: const Color(0xFF1C1C5A),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  child: ListTile(
+                    title: Text(
+                      playlist['nama_playlist'],
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.redAccent),
+                      onPressed: () => _deletePlaylist(
+                        playlist['id'],
+                        playlist['nama_playlist'],
+                      ),
+                    ),
+                    onTap: () {
+                      // Navigasi ke halaman detail playlist
+                      // Misal: Navigator.pushNamed(context, '/playlistDetail', arguments: playlist['id']);
+                    },
+                  ),
+                );
+              },
+            ),
     );
   }
 }
