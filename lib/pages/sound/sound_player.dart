@@ -1,5 +1,6 @@
-import 'package:calm_wave/pages/sound/audio_manager.dart'; // <- IMPORT PENTING
+import 'package:calm_wave/pages/sound/audio_manager.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SoundPlayer extends StatefulWidget {
   const SoundPlayer({super.key});
@@ -10,14 +11,16 @@ class SoundPlayer extends StatefulWidget {
 
 class _SoundPlayerState extends State<SoundPlayer> {
   final AudioManager _audioManager = AudioManager.instance;
+  final supabase = Supabase.instance.client;
 
   bool isPlaying = false;
-  bool isBookmarked = false;
   bool isMuted = false;
   double volume = 0.5;
 
   final String audioUrl =
       'https://vioeocsssqihgkbjuucm.supabase.co/storage/v1/object/public/sounds/sounds/rain-and-thunder-for-better-sleep-148899.mp3';
+
+  final String soundId = "1";
 
   @override
   void initState() {
@@ -38,16 +41,14 @@ class _SoundPlayerState extends State<SoundPlayer> {
       });
 
       _audioManager.player.playingStream.listen((playing) {
-        if (mounted) {
-          setState(() => isPlaying = playing);
-        }
+        if (mounted) setState(() => isPlaying = playing);
       });
 
-      _audioManager.player.volumeStream.listen((currentVolume) {
+      _audioManager.player.volumeStream.listen((v) {
         if (mounted) {
           setState(() {
-            volume = currentVolume;
-            isMuted = currentVolume == 0;
+            volume = v;
+            isMuted = v == 0;
           });
         }
       });
@@ -65,95 +66,254 @@ class _SoundPlayerState extends State<SoundPlayer> {
   }
 
   Future<void> _toggleMute() async {
-    final newMuteState = !isMuted;
-    if (newMuteState) {
-      await _audioManager.player.setVolume(0);
-    } else {
-      double newVolume = volume > 0 ? volume : 0.5;
-      await _audioManager.player.setVolume(newVolume);
+    final newMuted = !isMuted;
+    await _audioManager.player.setVolume(
+      newMuted ? 0 : (volume > 0 ? volume : 0.5),
+    );
+    setState(() => isMuted = newMuted);
+  }
+
+  // Bottom Sheet (playlist milik current user)
+  Future<void> _showPlaylistBottomSheet() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Harap login terlebih dahulu.')),
+      );
+      return;
     }
-    setState(() {
-      isMuted = newMuteState;
-    });
+
+    try {
+      final response = await supabase
+          .from('playlist')
+          .select('id, nama_playlist')
+          .eq('user_id', user.id);
+
+      final userPlaylists = List<Map<String, dynamic>>.from(response);
+
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFF535C91),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (context) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              MediaQuery.of(context).viewInsets.bottom + 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  "Tambah ke playlist",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // BUAT PLAYLIST BARU
+                InkWell(
+                  onTap: () async {
+                    await supabase.from('playlist').insert({
+                      'nama_playlist': 'Playlist Baru',
+                      'user_id': user.id,
+                    });
+                    if (context.mounted) Navigator.pop(context);
+                    _showPlaylistBottomSheet(); // refresh ulang
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF818FB4),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          "Buat Playlist Baru",
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // LIST PLAYLIST
+                if (userPlaylists.isNotEmpty) ...[
+                  const Text(
+                    "Pilih Playlist",
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 10),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: userPlaylists.length,
+                      itemBuilder: (context, index) {
+                        final playlist = userPlaylists[index];
+                        return InkWell(
+                          onTap: () async {
+                            await _addSoundToPlaylist(
+                              playlistId: playlist['id'],
+                              playlistName: playlist['nama_playlist'],
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6B72A0),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              playlist['nama_playlist'],
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ] else
+                  const Center(
+                    child: Text(
+                      "Anda belum punya playlist.",
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint("Gagal ambil playlist: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text("Gagal memuat playlist."),
+        ),
+      );
+    }
   }
 
-  @override
-  void dispose() {
-    super.dispose();
+  Future<void> _addSoundToPlaylist({
+    required int playlistId,
+    required String playlistName,
+  }) async {
+    try {
+      final existing = await supabase
+          .from('playlist_sound')
+          .select()
+          .eq('id_playlist', playlistId)
+          .eq('id_sounds', soundId)
+          .maybeSingle();
+
+      if (existing != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sound sudah ada di playlist "$playlistName".'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        Navigator.pop(context);
+        return;
+      }
+
+      await supabase.from('playlist_sound').insert({
+        'id_playlist': playlistId,
+        'id_sounds': soundId,
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Berhasil ditambahkan ke "$playlistName"'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      debugPrint("Gagal menambah sound ke playlist: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gagal menambahkan sound.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
+  // UI Sound Bar
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      height: 42,
+      height: 80,
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF535C91),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
-          // Tombol Play/Pause
+          // Tombol Play / Pause
           IconButton(
             onPressed: _togglePlay,
             icon: Icon(
-              isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              isPlaying ? Icons.pause : Icons.play_arrow,
               color: Colors.white,
-              size: 22,
+              size: 40,
             ),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
           ),
-          const SizedBox(width: 6),
-          // Tombol Mute/Unmute
+          const SizedBox(width: 8),
+
+          // Slider Volume
+          Expanded(
+            child: Slider(
+              activeColor: Colors.white,
+              inactiveColor: Colors.white24,
+              value: isMuted ? 0 : volume,
+              onChanged: (value) async {
+                await _audioManager.player.setVolume(value);
+                setState(() {
+                  volume = value;
+                  isMuted = value == 0;
+                });
+              },
+            ),
+          ),
+
+          // Tombol Mute
           IconButton(
             onPressed: _toggleMute,
             icon: Icon(
-              isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+              isMuted ? Icons.volume_off : Icons.volume_up,
               color: Colors.white,
-              size: 20,
-            ),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-          const SizedBox(width: 6),
-          // Volume Bar (Slider)
-          Expanded(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                trackHeight: 4,
-                overlayShape: SliderComponentShape.noOverlay,
-              ),
-              child: Slider(
-                value: volume, // Nilai slider langsung dari state
-                min: 0,
-                max: 1,
-                onChanged: (v) async {
-                  // Langsung set volume ke player global
-                  await _audioManager.player.setVolume(v);
-                },
-                activeColor: const Color(0xFF0A0A3F),
-                inactiveColor: Colors.white70,
-              ),
             ),
           ),
-          const SizedBox(width: 6),
-          // Tombol Playlist
+
+          // Tombol Bookmark
           IconButton(
-            onPressed: () {
-              setState(() => isBookmarked = !isBookmarked);
-            },
-            icon: Icon(
-              isBookmarked
-                  ? Icons.bookmark_rounded
-                  : Icons.bookmark_border_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
+            onPressed: _showPlaylistBottomSheet,
+            icon: const Icon(Icons.bookmark_add_outlined, color: Colors.white),
           ),
         ],
       ),

@@ -1,5 +1,5 @@
 import 'package:calm_wave/common/widget/custom_appbar.dart';
-import 'package:calm_wave/pages/sound/audio_manager.dart'; // <- IMPORT PENTING
+import 'package:calm_wave/pages/sound/audio_manager.dart';
 import 'package:circular_countdown_timer/circular_countdown_timer.dart';
 import 'package:flutter/material.dart';
 
@@ -14,8 +14,6 @@ class _TimerState extends State<Timer> {
   final CountDownController _controller = CountDownController();
   final TextEditingController _inputController = TextEditingController();
 
-  // --- PERUBAHAN UTAMA ---
-  // Dapatkan satu-satunya instance AudioManager, bukan membuat yang baru.
   final AudioManager _audioManager = AudioManager.instance;
 
   bool _isRunning = false;
@@ -25,7 +23,6 @@ class _TimerState extends State<Timer> {
   @override
   void initState() {
     super.initState();
-    // Tidak perlu lagi membuat instance AudioManager di sini.
   }
 
   @override
@@ -35,12 +32,10 @@ class _TimerState extends State<Timer> {
   }
 
   void _startTimer() {
-    // Sembunyikan keyboard saat timer dimulai
     FocusScope.of(context).unfocus();
 
     final int? minutes = int.tryParse(_inputController.text);
     if (minutes == null || minutes <= 0) {
-      // Tampilkan pesan jika input tidak valid
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Masukkan jumlah menit yang valid.'),
@@ -81,9 +76,7 @@ class _TimerState extends State<Timer> {
     });
   }
 
-  // Fungsi ini sekarang akan bekerja dengan benar.
   void _onTimerComplete() {
-    // Cek apakah player dari AudioManager sedang berjalan
     if (_audioManager.player.playing) {
       _audioManager.player.pause();
     }
@@ -93,7 +86,6 @@ class _TimerState extends State<Timer> {
       _duration = 0;
     });
 
-    // Beri notifikasi kepada pengguna
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Waktu habis! Audio telah dijeda.'),
@@ -139,7 +131,7 @@ class _TimerState extends State<Timer> {
               Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFF161E54),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(5),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: TextField(

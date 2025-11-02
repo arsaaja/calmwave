@@ -77,7 +77,7 @@ class _LoginPageState extends State<LoginPage> {
                 _buildTextField(
                   "Password",
                   controller: _passwordController,
-                  //obscure: true,
+                  obscure: true,
                 ),
                 const SizedBox(height: 20),
 

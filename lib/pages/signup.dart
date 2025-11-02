@@ -96,7 +96,7 @@ class _SignupPageState extends State<SignupPage> {
                 _buildTextField(
                   "Password",
                   controller: _passwordController,
-                  //obscure: true,
+                  obscure: true,
                 ),
                 const SizedBox(height: 12),
 
@@ -104,7 +104,7 @@ class _SignupPageState extends State<SignupPage> {
                 _buildTextField(
                   "Konfirmasi Password",
                   controller: _confirmPasswordController,
-                  //obscure: true,
+                  obscure: true,
                 ),
                 const SizedBox(height: 25),
 
