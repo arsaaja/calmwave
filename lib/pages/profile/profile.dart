@@ -68,7 +68,9 @@ class _ProfileState extends State<Profile> {
               style: const TextStyle(color: Color(0xFFB0B7D0), fontSize: 14),
             ),
             const SizedBox(height: 40),
-            // Tombol edit profil
+
+            // Tombol edit profil (sementara dikomentari)
+            /*
             GestureDetector(
               onTap: () {
                 // TODO: Tambahkan navigasi ke halaman edit profil
@@ -93,6 +95,8 @@ class _ProfileState extends State<Profile> {
               ),
             ),
             const SizedBox(height: 20),
+            */
+
             // Tombol logout
             GestureDetector(
               onTap: _logout,
