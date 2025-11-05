@@ -1,4 +1,5 @@
 import 'package:calm_wave/common/widget/tab_bar.dart';
+import 'package:calm_wave/pages/dashboard/dashboard.dart';
 import 'package:calm_wave/pages/login.dart';
 import 'package:calm_wave/pages/signup.dart';
 import 'package:calm_wave/pages/sound/sound_player.dart';
@@ -20,7 +21,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: SignupPage(),
+      home: Dashboard(),
       debugShowCheckedModeBanner: false,
       title: 'CalmWave',
       theme: ThemeData(
