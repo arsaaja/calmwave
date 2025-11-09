@@ -34,7 +34,7 @@ class _GridSoundState extends State<GridSound> {
 
     var query = _supabase
         .from('sounds')
-        .select('id, judul, image_url, id_kategori');
+        .select('id, judul, image_url, id_kategori',);
 
     if (widget.selectedCategory != "Semua") {
       // Sesuaikan filter dengan struktur database kamu
