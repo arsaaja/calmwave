@@ -94,16 +94,10 @@ class _GridSoundState extends State<GridSound> {
                 if (sound['image_url'] != null)
                   Image.network(
                     sound['image_url'],
-                    height: 50,
-                    width: 50,
+                    height: 130,
+                    width: 130,
                     fit: BoxFit.contain,
                   ),
-                const SizedBox(height: 6),
-                Text(
-                  sound['judul'] ?? '',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
               ],
             ),
           ),
