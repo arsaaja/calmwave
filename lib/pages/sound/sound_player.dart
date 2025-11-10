@@ -19,7 +19,6 @@ class _SoundPlayerState extends State<SoundPlayer> {
 
   final String audioUrl =
       'https://vioeocsssqihgkbjuucm.supabase.co/storage/v1/object/public/sounds/sounds/rain-and-thunder-for-better-sleep-148899.mp3';
-
   final String soundId = "1";
 
   @override
@@ -73,7 +72,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
     setState(() => isMuted = newMuted);
   }
 
-  // Bottom Sheet (playlist milik current user)
+  // 🧩 Bottom Sheet Utama: daftar playlist user
   Future<void> _showPlaylistBottomSheet() async {
     final user = supabase.auth.currentUser;
     if (user == null) {
@@ -112,7 +111,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text(
-                  "Tambah ke playlist",
+                  "Tambah ke Playlist",
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,
@@ -122,16 +121,9 @@ class _SoundPlayerState extends State<SoundPlayer> {
                 ),
                 const SizedBox(height: 20),
 
-                // BUAT PLAYLIST BARU
+                // Tombol buat playlist baru
                 InkWell(
-                  onTap: () async {
-                    await supabase.from('playlist').insert({
-                      'nama_playlist': 'Playlist Baru',
-                      'user_id': user.id,
-                    });
-                    if (context.mounted) Navigator.pop(context);
-                    _showPlaylistBottomSheet(); // refresh ulang
-                  },
+                  onTap: _showCreatePlaylistSheet, // 🔄 ganti ke fungsi baru
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -153,7 +145,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
                 ),
                 const SizedBox(height: 16),
 
-                // LIST PLAYLIST
+                // List playlist user
                 if (userPlaylists.isNotEmpty) ...[
                   const Text(
                     "Pilih Playlist",
@@ -215,6 +207,84 @@ class _SoundPlayerState extends State<SoundPlayer> {
     }
   }
 
+  // 🧩 Bottom Sheet kedua: input nama playlist baru
+  Future<void> _showCreatePlaylistSheet() async {
+    final TextEditingController controller = TextEditingController();
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF535C91),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Nama Playlist Baru",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  hintText: "Masukkan nama playlist...",
+                  hintStyle: TextStyle(color: Colors.white54),
+                  filled: true,
+                  fillColor: Color(0xFF6B72A0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                  ),
+                ),
+                style: const TextStyle(color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF818FB4),
+                ),
+                onPressed: () async {
+                  final name = controller.text.trim();
+                  if (name.isEmpty) return;
+
+                  await supabase.from('playlist').insert({
+                    'nama_playlist': name,
+                    'user_id': user.id,
+                  });
+
+                  if (context.mounted) {
+                    Navigator.pop(context); // tutup input
+                    Navigator.pop(context); // tutup sheet lama
+                    _showPlaylistBottomSheet(); // refresh
+                  }
+                },
+                child: const Text(
+                  "Simpan",
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _addSoundToPlaylist({
     required int playlistId,
     required String playlistName,
@@ -274,7 +344,6 @@ class _SoundPlayerState extends State<SoundPlayer> {
       ),
       child: Row(
         children: [
-          // Tombol Play / Pause
           IconButton(
             onPressed: _togglePlay,
             icon: Icon(
@@ -284,8 +353,6 @@ class _SoundPlayerState extends State<SoundPlayer> {
             ),
           ),
           const SizedBox(width: 8),
-
-          // Tombol Mute
           IconButton(
             onPressed: _toggleMute,
             icon: Icon(
@@ -293,8 +360,6 @@ class _SoundPlayerState extends State<SoundPlayer> {
               color: Colors.white,
             ),
           ),
-
-          // Slider Volume
           Expanded(
             child: Slider(
               activeColor: Colors.white,
@@ -309,8 +374,6 @@ class _SoundPlayerState extends State<SoundPlayer> {
               },
             ),
           ),
-
-          // Tombol Bookmark
           IconButton(
             onPressed: _showPlaylistBottomSheet,
             icon: const Icon(Icons.bookmark_add_outlined, color: Colors.white),
