@@ -2,107 +2,187 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class GridSound extends StatefulWidget {
-  final String selectedCategory;
+  // Menerima ID Kategori (UUID) untuk filter
+  final String selectedCategoryId;
 
-  const GridSound({super.key, required this.selectedCategory});
+  const GridSound({super.key, required this.selectedCategoryId});
 
   @override
   State<GridSound> createState() => _GridSoundState();
 }
 
 class _GridSoundState extends State<GridSound> {
-  final _supabase = Supabase.instance.client;
-  List<Map<String, dynamic>> _sounds = [];
-  bool _isLoading = true;
+  final supabase = Supabase.instance.client;
+  late Future<List<Map<String, dynamic>>> _soundFuture;
 
   @override
   void initState() {
     super.initState();
-    _fetchSounds();
+    _soundFuture = _fetchSounds();
   }
 
   @override
-  void didUpdateWidget(GridSound oldWidget) {
+  void didUpdateWidget(covariant GridSound oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedCategory != widget.selectedCategory) {
-      _fetchSounds();
+    // Panggil ulang fetch saat ID kategori berubah
+    if (oldWidget.selectedCategoryId != widget.selectedCategoryId) {
+      _soundFuture = _fetchSounds();
     }
   }
 
-  Future<void> _fetchSounds() async {
-    setState(() => _isLoading = true);
+  Future<List<Map<String, dynamic>>> _fetchSounds() async {
+    try {
+      final categoryId = widget.selectedCategoryId;
 
-    var query = _supabase
-        .from('sounds')
-        .select('id, judul, image_url, id_kategori',);
+      // Menggunakan nama tabel 'sounds'
+      PostgrestFilterBuilder query = supabase.from('sounds').select('*');
 
-    if (widget.selectedCategory != "Semua") {
-      // Sesuaikan filter dengan struktur database kamu
-      query = query.eq('id_kategori', widget.selectedCategory);
+      // Logika Filter berdasarkan ID Kategori (UUID)
+      if (categoryId != "all") {
+        // Asumsi kolom filter adalah 'id_kategori'
+        query = query.eq('id_kategori', categoryId);
+      }
+
+      final response = await query.order('judul', ascending: true);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint("Error fetching sounds: $e");
+      throw Exception('Gagal memuat data sounds.');
     }
-
-    final data = await query;
-    setState(() {
-      _sounds = List<Map<String, dynamic>>.from(data);
-      _isLoading = false;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
-      );
-    }
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      key: ValueKey(widget.selectedCategoryId),
+      future: _soundFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          );
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Error: ${snapshot.error}',
+              style: const TextStyle(color: Colors.redAccent),
+            ),
+          );
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(
+            child: Text(
+              'Tidak ada sound dalam kategori ini.',
+              style: TextStyle(color: Colors.white70),
+            ),
+          );
+        }
 
-    if (_sounds.isEmpty) {
-      return const Center(
-        child: Text(
-          "Tidak ada data sound.",
-          style: TextStyle(color: Colors.white70),
-        ),
-      );
-    }
+        final sounds = snapshot.data!;
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _sounds.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemBuilder: (context, index) {
-        final sound = _sounds[index];
-        return GestureDetector(
-          onTap: () {
-            Navigator.pushNamed(
-              context,
-              '/sound_player',
-              arguments: sound['id'],
+        // Implementasi GridView dengan crossAxisCount: 3
+        return GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 16.0,
+            mainAxisSpacing: 16.0,
+            childAspectRatio: 1.0, // Item kotak
+          ),
+          itemCount: sounds.length,
+          itemBuilder: (context, index) {
+            final sound = sounds[index];
+
+            return _SoundGridItem(
+              // Meneruskan URL gambar dari Supabase
+              imageUrl: sound['image_url'] ?? '',
+              onTap: () {
+                // Aksi putar sound
+              },
             );
           },
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xff9290C3),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (sound['image_url'] != null)
-                  Image.network(
-                    sound['image_url'],
-                    height: 130,
-                    width: 130,
-                    fit: BoxFit.contain,
-                  ),
-              ],
-            ),
-          ),
         );
       },
+    );
+  }
+}
+
+// --- Widget untuk Tampilan Item Grid (Menampilkan Gambar Jaringan) ---
+class _SoundGridItem extends StatelessWidget {
+  final String imageUrl;
+  final VoidCallback onTap;
+
+  const _SoundGridItem({required this.imageUrl, required this.onTap});
+
+  // Catatan: Fungsi _getIconData telah dihapus karena kita menggunakan Image.network
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF9290C3),
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 4,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          // Memotong gambar sesuai border radius
+          borderRadius: BorderRadius.circular(15),
+          child: Image.network(
+            imageUrl, // ⚠️ Memuat gambar PNG/Kustom dari URL Jaringan
+            fit: BoxFit.cover,
+
+            // Tampilkan spinner saat loading
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white70,
+                    strokeWidth: 2,
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                        : null,
+                  ),
+                ),
+              );
+            },
+
+            // Tampilkan pesan error saat gambar gagal dimuat
+            errorBuilder: (context, error, stackTrace) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.image_not_supported,
+                      color: Colors.white54,
+                      size: 40,
+                    ),
+                    SizedBox(height: 5),
+                    Text(
+                      'Gagal muat',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 }

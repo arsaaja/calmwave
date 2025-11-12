@@ -16,17 +16,26 @@ class Dashboard extends StatefulWidget {
 
 class _DashboardState extends State<Dashboard> {
   final supabase = Supabase.instance.client;
-  final List<String> _categories = ["Semua", "Benda", "Hewan", "Alam"];
-  int selectedIndex = 0;
+
+  // Struktur Kategori menggunakan ID (UUID) dan Nama
+  final List<Map<String, String>> _categories = [
+    {'id': 'all', 'name': 'Semua'},
+    {
+      'id': '61a8d950-8cd6-4e4a-a9ec-4dde31d7e82b',
+      'name': 'Benda',
+    }, // Ganti dengan UUID asli dari tabel kategori Anda
+    {'id': '448e9800-5645-4674-a3ea-b0b778d3a5e5', 'name': 'Hewan'},
+    {'id': '9764102b-b5db-4ede-9657-0ff485fa719d', 'name': 'Alam'},
+  ];
+
+  // Melacak ID kategori yang dipilih (UUID)
+  String selectedCategoryId = 'all';
 
   @override
   void initState() {
     super.initState();
-
-    // 🔹 Cek apakah user sudah login
     final user = supabase.auth.currentUser;
 
-    // 🔸 Kalau belum login, tampilkan popup setelah 10 detik
     if (user == null) {
       Timer(const Duration(seconds: 10), () {
         if (mounted) {
@@ -54,22 +63,24 @@ class _DashboardState extends State<Dashboard> {
         children: [
           const SizedBox(height: 20),
 
-          // 🔹 Tabs kategori
+          // Tabs kategori (ChoiceChip)
           CategoryTabs(
-            categories: _categories,
-            onChanged: (index) {
-              setState(() => selectedIndex = index);
+            categories: _categories, // Mengirim List<Map>
+            onChanged: (id) {
+              // Menerima ID (UUID) yang dipilih
+              setState(() => selectedCategoryId = id);
             },
           ),
 
           const SizedBox(height: 20),
 
-          // 🔹 Grid sound dari Supabase
+          // Grid sound dari Supabase
           Expanded(
-            child: GridSound(selectedCategory: _categories[selectedIndex]),
+            // Meneruskan ID Kategori (UUID) ke GridSound
+            child: GridSound(selectedCategoryId: selectedCategoryId),
           ),
 
-          // 🔹 Pemutar suara global (optional)
+          // Pemutar suara global (optional)
           const SoundPlayer(),
         ],
       ),

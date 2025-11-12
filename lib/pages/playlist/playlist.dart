@@ -1,5 +1,5 @@
 import 'package:calm_wave/common/widget/custom_appbar.dart';
-// TODO: import 'package:calm_wave/pages/playlist/playlist_detail_page.dart';
+import 'package:calm_wave/pages/playlist/playlist_detail_page.dart'; // Pastikan path ini benar!
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -11,6 +11,7 @@ class Playlist extends StatefulWidget {
 }
 
 class _PlaylistState extends State<Playlist> {
+  // Asumsi Supabase sudah diinisialisasi di main.dart
   final SupabaseClient _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _playlists = [];
   bool _isLoading = true;
@@ -25,19 +26,23 @@ class _PlaylistState extends State<Playlist> {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
+
+      // Ambil playlist pengguna dan hitung jumlah sound melalui tabel pivot
       final response = await _supabase
           .from('playlist')
           .select('*, playlist_sound(count)')
           .eq('user_id', user.id)
           .order('nama_playlist', ascending: true);
 
-      setState(() {
-        _playlists = List<Map<String, dynamic>>.from(response);
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _playlists = List<Map<String, dynamic>>.from(response);
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error fetching playlists: $e');
       if (mounted) {
@@ -58,6 +63,8 @@ class _PlaylistState extends State<Playlist> {
 
     final TextEditingController nameController = TextEditingController();
 
+    // Dialog untuk input nama playlist baru
+    // Menggunakan showGeneralDialog agar lebih mudah kustomisasi style-nya
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -144,7 +151,7 @@ class _PlaylistState extends State<Playlist> {
                             });
 
                             if (context.mounted) Navigator.pop(context);
-                            _fetchPlaylists();
+                            _fetchPlaylists(); // Refresh daftar playlist
                           },
                           child: const Text(
                             'Buat',
@@ -166,7 +173,6 @@ class _PlaylistState extends State<Playlist> {
     );
   }
 
-  // Tambahan fungsi EDIT playlist
   Future<void> _editPlaylist(Map<String, dynamic> playlist) async {
     final TextEditingController controller = TextEditingController(
       text: playlist['nama_playlist'] ?? '',
@@ -177,8 +183,10 @@ class _PlaylistState extends State<Playlist> {
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF1C2450),
-          title: const Text('Edit Nama Playlist',
-              style: TextStyle(color: Colors.white)),
+          title: const Text(
+            'Edit Nama Playlist',
+            style: TextStyle(color: Colors.white),
+          ),
           content: TextField(
             controller: controller,
             style: const TextStyle(color: Colors.white),
@@ -196,8 +204,10 @@ class _PlaylistState extends State<Playlist> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child:
-                  const Text('Batal', style: TextStyle(color: Colors.white70)),
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: Colors.white70),
+              ),
             ),
             TextButton(
               onPressed: () async {
@@ -209,6 +219,7 @@ class _PlaylistState extends State<Playlist> {
                     .update({'nama_playlist': newName})
                     .eq('id', playlist['id']);
 
+                // Update state secara lokal agar UI langsung berubah tanpa fetch ulang
                 setState(() {
                   playlist['nama_playlist'] = newName;
                 });
@@ -221,8 +232,10 @@ class _PlaylistState extends State<Playlist> {
                   ),
                 );
               },
-              child:
-                  const Text('Simpan', style: TextStyle(color: Colors.white)),
+              child: const Text(
+                'Simpan',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         );
@@ -230,7 +243,6 @@ class _PlaylistState extends State<Playlist> {
     );
   }
 
-  // Tambahan fungsi HAPUS playlist
   Future<void> _deletePlaylist(String id) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -242,19 +254,23 @@ class _PlaylistState extends State<Playlist> {
             style: TextStyle(color: Colors.white),
           ),
           content: const Text(
-            'Yakin ingin menghapus playlist ini?',
+            'Yakin ingin menghapus playlist ini? Ini akan menghapus semua sound di dalamnya.',
             style: TextStyle(color: Colors.white70),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child:
-                  const Text('Batal', style: TextStyle(color: Colors.white70)),
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: Colors.white70),
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child:
-                  const Text('Hapus', style: TextStyle(color: Colors.redAccent)),
+              child: const Text(
+                'Hapus',
+                style: TextStyle(color: Colors.redAccent),
+              ),
             ),
           ],
         );
@@ -264,24 +280,30 @@ class _PlaylistState extends State<Playlist> {
     if (confirm != true) return;
 
     try {
+      // Supabase biasanya akan menangani penghapusan cascade pada 'playlist_sound'
       await _supabase.from('playlist').delete().eq('id', id);
-      setState(() {
-        _playlists.removeWhere((p) => p['id'] == id);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Playlist berhasil dihapus'),
-          backgroundColor: Color(0xFF535C91),
-        ),
-      );
+
+      if (mounted) {
+        setState(() {
+          _playlists.removeWhere((p) => p['id'] == id);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Playlist berhasil dihapus'),
+            backgroundColor: Color(0xFF535C91),
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('Error deleting playlist: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Gagal menghapus playlist'),
-          backgroundColor: Color(0xFF535C91),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal menghapus playlist'),
+            backgroundColor: Color(0xFF535C91),
+          ),
+        );
+      }
     }
   }
 
@@ -357,99 +379,138 @@ class _PlaylistState extends State<Playlist> {
                     else
                       ..._playlists.map((playlist) {
                         final sounds = playlist['playlist_sound'] as List;
+                        // Mengambil jumlah sound. Jika sounds kosong, count 0
                         final count = sounds.isNotEmpty
-                            ? sounds[0]['count']
+                            ? sounds[0]['count'] as int
                             : 0;
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1C2450),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: [
-                              const CircleAvatar(
-                                radius: 24,
-                                backgroundColor: Color(0xFF8A86FF),
-                                child: Icon(
-                                  Icons.music_note,
-                                  color: Colors.white,
-                                  size: 26,
+                        // ID dan Nama yang akan diteruskan
+                        final String playlistId = playlist['id'].toString();
+                        final String playlistName =
+                            playlist['nama_playlist'] ?? 'Tanpa Nama';
+
+                        return GestureDetector(
+                          // --- LOGIKA NAVIGASI KE DETAIL PLAYLIST ---
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => PlaylistDetailPage(
+                                  playlistId: playlistId,
+                                  playlistName: playlistName,
                                 ),
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      playlist['nama_playlist'] ??
-                                          'Tanpa Nama',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
+                            );
+                          },
+                          // ------------------------------------------
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1C2450),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                const CircleAvatar(
+                                  radius: 24,
+                                  backgroundColor: Color(0xFF8A86FF),
+                                  child: Icon(
+                                    Icons.music_note,
+                                    color: Colors.white,
+                                    size: 26,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        playlistName,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      overflow: TextOverflow.ellipsis,
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '$count lagu',
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Tombol Popup
+                                PopupMenuButton<String>(
+                                  // Menghentikan onTap dari GestureDetector di bawahnya saat ikon ditekan
+                                  onSelected: (value) async {
+                                    if (value == 'edit') {
+                                      _editPlaylist(playlist);
+                                    } else if (value == 'delete') {
+                                      _deletePlaylist(playlist['id']);
+                                    }
+                                  },
+                                  color: const Color(
+                                    0xFF1C2450,
+                                  ), // Warna popup menu
+                                  icon: const Icon(
+                                    Icons.more_vert,
+                                    color: Colors.white70,
+                                    size: 22,
+                                  ),
+                                  itemBuilder: (context) => [
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.edit,
+                                            color: Colors.white70,
+                                            size: 18,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'Ganti Nama',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '$count lagu',
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 13,
+                                    const PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.delete,
+                                            color: Colors.redAccent,
+                                            size: 18,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'Hapus',
+                                            style: TextStyle(
+                                              color: Colors.redAccent,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],
                                 ),
-                              ),
-                              PopupMenuButton<String>(
-                                icon: const Icon(Icons.more_vert,
-                                    color: Colors.white70, size: 22),
-                                color: const Color(0xFF1C2450),
-                                onSelected: (value) async {
-                                  if (value == 'edit') {
-                                    _editPlaylist(playlist);
-                                  } else if (value == 'delete') {
-                                    _deletePlaylist(playlist['id']);
-                                  }
-                                },
-                                itemBuilder: (context) => [
-                                  const PopupMenuItem(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.edit,
-                                            color: Colors.white70, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Ganti Nama',
-                                            style:
-                                                TextStyle(color: Colors.white)),
-                                      ],
-                                    ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'delete',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.delete,
-                                            color: Colors.redAccent, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Hapus',
-                                            style: TextStyle(
-                                                color: Colors.redAccent)),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         );
                       }),
