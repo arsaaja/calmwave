@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SoundPlayer extends StatefulWidget {
-  const SoundPlayer({super.key});
+  final String soundId;
+  final String audioUrl;
+
+  const SoundPlayer({super.key, required this.soundId, required this.audioUrl});
 
   @override
   State<SoundPlayer> createState() => _SoundPlayerState();
@@ -17,9 +20,8 @@ class _SoundPlayerState extends State<SoundPlayer> {
   bool isMuted = false;
   double volume = 0.5;
 
-  final String audioUrl =
-      'https://vioeocsssqihgkbjuucm.supabase.co/storage/v1/object/public/sounds/sounds/rain-and-thunder-for-better-sleep-148899.mp3';
-  final String soundId = "1";
+  late final String audioUrl = widget.audioUrl;
+  late final String soundId = widget.soundId;
 
   @override
   void initState() {
@@ -29,9 +31,9 @@ class _SoundPlayerState extends State<SoundPlayer> {
 
   Future<void> _initPlayer() async {
     try {
-      if (_audioManager.player.audioSource == null) {
+
         await _audioManager.player.setUrl(audioUrl);
-      }
+      
 
       setState(() {
         isPlaying = _audioManager.player.playing;

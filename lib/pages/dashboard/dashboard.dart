@@ -81,7 +81,7 @@ class _DashboardState extends State<Dashboard> {
           ),
 
           // Pemutar suara global (optional)
-          const SoundPlayer(),
+          //const SoundPlayer(),
         ],
       ),
     );

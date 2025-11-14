@@ -34,12 +34,9 @@ class _GridSoundState extends State<GridSound> {
     try {
       final categoryId = widget.selectedCategoryId;
 
-      // Menggunakan nama tabel 'sounds'
       PostgrestFilterBuilder query = supabase.from('sounds').select('*');
 
-      // Logika Filter berdasarkan ID Kategori (UUID)
       if (categoryId != "all") {
-        // Asumsi kolom filter adalah 'id_kategori'
         query = query.eq('id_kategori', categoryId);
       }
 
@@ -82,24 +79,31 @@ class _GridSoundState extends State<GridSound> {
 
         final sounds = snapshot.data!;
 
-        // Implementasi GridView dengan crossAxisCount: 3
         return GridView.builder(
           padding: const EdgeInsets.all(16),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
             crossAxisSpacing: 16.0,
             mainAxisSpacing: 16.0,
-            childAspectRatio: 1.0, // Item kotak
+            childAspectRatio: 1.0,
           ),
           itemCount: sounds.length,
           itemBuilder: (context, index) {
             final sound = sounds[index];
 
             return _SoundGridItem(
-              // Meneruskan URL gambar dari Supabase
               imageUrl: sound['image_url'] ?? '',
+
+             
               onTap: () {
-                // Aksi putar sound
+                Navigator.pushNamed(
+                  context,
+                  '/sound_player',
+                  arguments: <String, String>{
+                    'soundId': sound['id'].toString(),
+                    'audioUrl': (sound['audio_url'] ?? '').toString(),
+                  },
+                );
               },
             );
           },
@@ -109,19 +113,17 @@ class _GridSoundState extends State<GridSound> {
   }
 }
 
-// --- Widget untuk Tampilan Item Grid (Menampilkan Gambar Jaringan) ---
+// --- Widget untuk Tampilan Grid ---
 class _SoundGridItem extends StatelessWidget {
   final String imageUrl;
   final VoidCallback onTap;
 
   const _SoundGridItem({required this.imageUrl, required this.onTap});
 
-  // Catatan: Fungsi _getIconData telah dihapus karena kita menggunakan Image.network
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: onTap, // ➕ Aksi pencet
       child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFF9290C3),
@@ -135,13 +137,11 @@ class _SoundGridItem extends StatelessWidget {
           ],
         ),
         child: ClipRRect(
-          // Memotong gambar sesuai border radius
           borderRadius: BorderRadius.circular(15),
           child: Image.network(
-            imageUrl, // ⚠️ Memuat gambar PNG/Kustom dari URL Jaringan
+            imageUrl,
             fit: BoxFit.cover,
 
-            // Tampilkan spinner saat loading
             loadingBuilder: (context, child, loadingProgress) {
               if (loadingProgress == null) return child;
               return Center(
@@ -160,7 +160,6 @@ class _SoundGridItem extends StatelessWidget {
               );
             },
 
-            // Tampilkan pesan error saat gambar gagal dimuat
             errorBuilder: (context, error, stackTrace) {
               return const Center(
                 child: Column(
