@@ -3,14 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SoundPlayer extends StatefulWidget {
-  final String? audioUrl; // ➕ URL audio yang dikirim dari Dashboard
-  final String? soundId; // ➕ ID sound yang dikirim dari Dashboard
+  final String? audioUrl;
+  final String? soundId; // ID sound dari dashboard (UUID diharuskan)
 
-  const SoundPlayer({
-    super.key,
-    this.audioUrl,
-    this.soundId,
-  }); // ➕ tambahkan parameter
+  const SoundPlayer({super.key, this.audioUrl, this.soundId});
 
   @override
   State<SoundPlayer> createState() => _SoundPlayerState();
@@ -33,8 +29,9 @@ class _SoundPlayerState extends State<SoundPlayer> {
   @override
   void didUpdateWidget(covariant SoundPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
+
     if (widget.audioUrl != null && widget.audioUrl != oldWidget.audioUrl) {
-      _audioManager.player.stop(); // ➕ hentikan audio lama
+      _audioManager.player.stop();
       _audioManager.player.setUrl(widget.audioUrl!).then((_) {
         _audioManager.player.play();
         setState(() => isPlaying = true);
@@ -87,7 +84,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
     setState(() => isMuted = newMuted);
   }
 
-  // 🧩 Bottom Sheet Utama: daftar playlist user
+  // BOTTOM SHEET LIST PLAYLIST
   Future<void> _showPlaylistBottomSheet() async {
     final user = supabase.auth.currentUser;
     if (user == null) {
@@ -106,6 +103,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
       final userPlaylists = List<Map<String, dynamic>>.from(response);
 
       if (!mounted) return;
+
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
@@ -136,9 +134,8 @@ class _SoundPlayerState extends State<SoundPlayer> {
                 ),
                 const SizedBox(height: 20),
 
-                // Tombol buat playlist baru
                 InkWell(
-                  onTap: _showCreatePlaylistSheet, // 🔄 ganti ke fungsi baru
+                  onTap: _showCreatePlaylistSheet,
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -158,15 +155,16 @@ class _SoundPlayerState extends State<SoundPlayer> {
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 16),
 
-                // List playlist user
                 if (userPlaylists.isNotEmpty) ...[
                   const Text(
                     "Pilih Playlist",
                     style: TextStyle(color: Colors.white70),
                   ),
                   const SizedBox(height: 10),
+
                   Flexible(
                     child: ListView.builder(
                       shrinkWrap: true,
@@ -176,7 +174,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
                         return InkWell(
                           onTap: () async {
                             await _addSoundToPlaylist(
-                              playlistId: playlist['id'],
+                              playlistId: playlist['id'].toString(), // FIXED
                               playlistName: playlist['nama_playlist'],
                             );
                           },
@@ -222,10 +220,11 @@ class _SoundPlayerState extends State<SoundPlayer> {
     }
   }
 
-  // 🧩 Bottom Sheet kedua: input nama playlist baru
+  // BOTTOM SHEET BUAT PLAYLIST BARU
   Future<void> _showCreatePlaylistSheet() async {
-    final TextEditingController controller = TextEditingController();
+    final controller = TextEditingController();
     final user = supabase.auth.currentUser;
+
     if (user == null) return;
 
     showModalBottomSheet(
@@ -255,6 +254,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
                 ),
               ),
               const SizedBox(height: 12),
+
               TextField(
                 controller: controller,
                 decoration: const InputDecoration(
@@ -268,7 +268,9 @@ class _SoundPlayerState extends State<SoundPlayer> {
                 ),
                 style: const TextStyle(color: Colors.white),
               ),
+
               const SizedBox(height: 12),
+
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF818FB4),
@@ -283,9 +285,9 @@ class _SoundPlayerState extends State<SoundPlayer> {
                   });
 
                   if (context.mounted) {
-                    Navigator.pop(context); // tutup input
-                    Navigator.pop(context); // tutup sheet lama
-                    _showPlaylistBottomSheet(); // refresh
+                    Navigator.pop(context);
+                    Navigator.pop(context);
+                    _showPlaylistBottomSheet();
                   }
                 },
                 child: const Text(
@@ -300,18 +302,20 @@ class _SoundPlayerState extends State<SoundPlayer> {
     );
   }
 
+  // ADD SOUND KE PLAYLIST
   Future<void> _addSoundToPlaylist({
-    required int playlistId,
+    required String playlistId,
     required String playlistName,
   }) async {
     try {
-      final soundId = widget.soundId; // ➕ ambil dari widget
-      if (soundId == null) return; // ➕ safety check
+      final soundId = widget.soundId?.toString(); // FIXED
+      if (soundId == null) return;
+
       final existing = await supabase
           .from('playlist_sound')
           .select()
           .eq('id_playlist', playlistId)
-          .eq('id_sounds', soundId) // ✅ sekarang dinamis
+          .eq('id_sounds', soundId)
           .maybeSingle();
 
       if (existing != null) {
@@ -336,9 +340,11 @@ class _SoundPlayerState extends State<SoundPlayer> {
           backgroundColor: Colors.green,
         ),
       );
+
       Navigator.pop(context);
     } catch (e) {
       debugPrint("Gagal menambah sound ke playlist: $e");
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Gagal menambahkan sound.'),
@@ -348,7 +354,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
     }
   }
 
-  // UI Sound Bar
+  // UI MINI PLAYER
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -369,7 +375,9 @@ class _SoundPlayerState extends State<SoundPlayer> {
               size: 30,
             ),
           ),
+
           const SizedBox(width: 8),
+
           IconButton(
             onPressed: _toggleMute,
             icon: Icon(
@@ -377,6 +385,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
               color: Colors.white,
             ),
           ),
+
           Expanded(
             child: Slider(
               activeColor: Colors.white,
@@ -391,6 +400,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
               },
             ),
           ),
+
           IconButton(
             onPressed: _showPlaylistBottomSheet,
             icon: const Icon(Icons.bookmark_add_outlined, color: Colors.white),

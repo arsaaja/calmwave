@@ -100,7 +100,7 @@ class _PlaylistBottomSheetState extends State<PlaylistBottomSheet> {
 
   // 🎯 LOGIKA UNTUK MENAMBAH SOUND KE PLAYLIST
   Future<void> _addSoundToPlaylist({
-    required int playlistId,
+    required String playlistId,
     required String playlistName,
   }) async {
     // 1. Pengecekan ID sound
@@ -262,7 +262,7 @@ class _PlaylistBottomSheetState extends State<PlaylistBottomSheet> {
     );
   }
 
-  Future<void> _deletePlaylist(int playlistId, String name) async {
+  Future<void> _deletePlaylist(String playlistId, String name) async {
     try {
       // Hapus sound yang terkait (di tabel playlist_sound)
       await supabase
