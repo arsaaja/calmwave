@@ -34,25 +34,10 @@ class MyApp extends StatelessWidget {
         '/signup': (context) => const SignupPage(),
         '/login': (context) => const LoginPage(),
         '/tab_bar': (context) => const CustomTabBar(),
-      },
-      onGenerateRoute: (settings) {
-        if (settings.name == '/sound_player') {
-          final args = settings.arguments as Map<String, String>;
-
-          return MaterialPageRoute(
-            builder: (context) => Scaffold(
-              backgroundColor: const Color(0xFF070F2B),
-              body: SafeArea(
-                child: SoundPlayer(
-                  soundId: args['soundId']!,
-                  audioUrl: args['audioUrl']!,
-                ),
-              ),
-            ),
-          );
-        }
-
-        return null;
+        '/sound_player': (context) => const Scaffold(
+          backgroundColor: Color(0xFF070F2B),
+          body: SafeArea(child: SoundPlayer()),
+        ),
       },
     );
   }

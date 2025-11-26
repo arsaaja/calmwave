@@ -16,6 +16,8 @@ class Dashboard extends StatefulWidget {
 
 class _DashboardState extends State<Dashboard> {
   final supabase = Supabase.instance.client;
+  String? currentAudioUrl; // ➕ URL audio saat ini
+  String? currentSoundId; // ➕ ID sound saat ini
 
   // Struktur Kategori menggunakan ID (UUID) dan Nama
   final List<Map<String, String>> _categories = [
@@ -77,11 +79,23 @@ class _DashboardState extends State<Dashboard> {
           // Grid sound dari Supabase
           Expanded(
             // Meneruskan ID Kategori (UUID) ke GridSound
-            child: GridSound(selectedCategoryId: selectedCategoryId),
+            child: GridSound(
+              selectedCategoryId: selectedCategoryId,
+              onSoundSelected: (audioUrl, soundId) {
+                // ➕ callback saat grid ditekan
+                setState(() {
+                  currentAudioUrl = audioUrl;
+                  currentSoundId = soundId;
+                });
+              },
+            ),
           ),
 
           // Pemutar suara global (optional)
-          //const SoundPlayer(),
+          SoundPlayer(
+            audioUrl: currentAudioUrl, // ➕ kirim URL yang dipilih user
+            soundId: currentSoundId, // ➕ kirim ID yang dipilih user
+          ),
         ],
       ),
     );

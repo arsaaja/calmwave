@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SoundPlayer extends StatefulWidget {
-  final String soundId;
-  final String audioUrl;
+  final String? audioUrl; // ➕ URL audio yang dikirim dari Dashboard
+  final String? soundId; // ➕ ID sound yang dikirim dari Dashboard
 
-  const SoundPlayer({super.key, required this.soundId, required this.audioUrl});
+  const SoundPlayer({
+    super.key,
+    this.audioUrl,
+    this.soundId,
+  }); // ➕ tambahkan parameter
 
   @override
   State<SoundPlayer> createState() => _SoundPlayerState();
@@ -20,20 +24,29 @@ class _SoundPlayerState extends State<SoundPlayer> {
   bool isMuted = false;
   double volume = 0.5;
 
-  late final String audioUrl = widget.audioUrl;
-  late final String soundId = widget.soundId;
-
   @override
   void initState() {
     super.initState();
     _initPlayer();
   }
 
+  @override
+  void didUpdateWidget(covariant SoundPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.audioUrl != null && widget.audioUrl != oldWidget.audioUrl) {
+      _audioManager.player.stop(); // ➕ hentikan audio lama
+      _audioManager.player.setUrl(widget.audioUrl!).then((_) {
+        _audioManager.player.play();
+        setState(() => isPlaying = true);
+      });
+    }
+  }
+
   Future<void> _initPlayer() async {
     try {
-
-        await _audioManager.player.setUrl(audioUrl);
-      
+      if (_audioManager.player.audioSource == null) {
+        await _audioManager.player.setUrl(widget.audioUrl!);
+      }
 
       setState(() {
         isPlaying = _audioManager.player.playing;
@@ -292,11 +305,13 @@ class _SoundPlayerState extends State<SoundPlayer> {
     required String playlistName,
   }) async {
     try {
+      final soundId = widget.soundId; // ➕ ambil dari widget
+      if (soundId == null) return; // ➕ safety check
       final existing = await supabase
           .from('playlist_sound')
           .select()
           .eq('id_playlist', playlistId)
-          .eq('id_sounds', soundId)
+          .eq('id_sounds', soundId) // ✅ sekarang dinamis
           .maybeSingle();
 
       if (existing != null) {

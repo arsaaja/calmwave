@@ -4,8 +4,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class GridSound extends StatefulWidget {
   // Menerima ID Kategori (UUID) untuk filter
   final String selectedCategoryId;
+  final void Function(String audioUrl, String soundId)
+  onSoundSelected; // ➕ callback untuk kirim audio ke Dashboard
 
-  const GridSound({super.key, required this.selectedCategoryId});
+  const GridSound({
+    super.key,
+    required this.selectedCategoryId,
+    required this.onSoundSelected, // ➕ wajib kirim callback
+  });
 
   @override
   State<GridSound> createState() => _GridSoundState();
@@ -34,9 +40,12 @@ class _GridSoundState extends State<GridSound> {
     try {
       final categoryId = widget.selectedCategoryId;
 
+      // Menggunakan nama tabel 'sounds'
       PostgrestFilterBuilder query = supabase.from('sounds').select('*');
 
+      // Logika Filter berdasarkan ID Kategori (UUID)
       if (categoryId != "all") {
+        // Asumsi kolom filter adalah 'id_kategori'
         query = query.eq('id_kategori', categoryId);
       }
 
@@ -79,31 +88,28 @@ class _GridSoundState extends State<GridSound> {
 
         final sounds = snapshot.data!;
 
+        // Implementasi GridView dengan crossAxisCount: 3
         return GridView.builder(
           padding: const EdgeInsets.all(16),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
             crossAxisSpacing: 16.0,
             mainAxisSpacing: 16.0,
-            childAspectRatio: 1.0,
+            childAspectRatio: 1.0, // Item kotak
           ),
           itemCount: sounds.length,
           itemBuilder: (context, index) {
             final sound = sounds[index];
 
             return _SoundGridItem(
+              // Meneruskan URL gambar dari Supabase
               imageUrl: sound['image_url'] ?? '',
-
-             
               onTap: () {
-                Navigator.pushNamed(
-                  context,
-                  '/sound_player',
-                  arguments: <String, String>{
-                    'soundId': sound['id'].toString(),
-                    'audioUrl': (sound['audio_url'] ?? '').toString(),
-                  },
+                widget.onSoundSelected(
+                  sound['audio_url'] ?? '', // ➕ kirim URL audio
+                  sound['id'].toString(), // ➕ kirim ID sound
                 );
+                // ❌ Hapus Navigator.pushNamed agar tidak pindah halaman
               },
             );
           },
@@ -113,17 +119,19 @@ class _GridSoundState extends State<GridSound> {
   }
 }
 
-// --- Widget untuk Tampilan Grid ---
+// --- Widget untuk Tampilan Item Grid (Menampilkan Gambar Jaringan) ---
 class _SoundGridItem extends StatelessWidget {
   final String imageUrl;
   final VoidCallback onTap;
 
   const _SoundGridItem({required this.imageUrl, required this.onTap});
 
+  // Catatan: Fungsi _getIconData telah dihapus karena kita menggunakan Image.network
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap, // ➕ Aksi pencet
+      onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFF9290C3),
@@ -137,11 +145,13 @@ class _SoundGridItem extends StatelessWidget {
           ],
         ),
         child: ClipRRect(
+          // Memotong gambar sesuai border radius
           borderRadius: BorderRadius.circular(15),
           child: Image.network(
-            imageUrl,
+            imageUrl, // ⚠️ Memuat gambar PNG/Kustom dari URL Jaringan
             fit: BoxFit.cover,
 
+            // Tampilkan spinner saat loading
             loadingBuilder: (context, child, loadingProgress) {
               if (loadingProgress == null) return child;
               return Center(
@@ -160,6 +170,7 @@ class _SoundGridItem extends StatelessWidget {
               );
             },
 
+            // Tampilkan pesan error saat gambar gagal dimuat
             errorBuilder: (context, error, stackTrace) {
               return const Center(
                 child: Column(
