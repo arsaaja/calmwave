@@ -1,5 +1,6 @@
 import 'package:calm_wave/common/widget/tab_bar.dart';
 import 'package:calm_wave/pages/dashboard/dashboard.dart';
+import 'package:calm_wave/common/widget/auth_gate.dart';
 import 'package:calm_wave/pages/login.dart';
 import 'package:calm_wave/pages/signup.dart';
 import 'package:calm_wave/pages/sound/sound_player.dart';
@@ -21,7 +22,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Dashboard(),
+      home: const AuthGate(),
       debugShowCheckedModeBanner: false,
       title: 'CalmWave',
       theme: ThemeData(
