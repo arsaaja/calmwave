@@ -1,6 +1,8 @@
 import 'package:calm_wave/common/widget/custom_appbar.dart';
-import 'package:calm_wave/models/sound_model.dart'; // Import model Sound
+import 'package:calm_wave/models/sound_model.dart';
+import 'package:calm_wave/pages/sound/audio_manager.dart';
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PlaylistDetailPage extends StatefulWidget {
@@ -19,6 +21,7 @@ class PlaylistDetailPage extends StatefulWidget {
 
 class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   final SupabaseClient _supabase = Supabase.instance.client;
+  final AudioManager _audioManager = AudioManager.instance;
   List<Sound> _sounds = [];
   bool _isLoading = true;
 
@@ -28,18 +31,20 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     _fetchPlaylistSounds();
   }
 
-  // --- FUNGSI FETCH DATA DARI SUPABASE ---
+  // 📝 FUNGSI FETCH DATA DARI SUPABASE
   Future<void> _fetchPlaylistSounds() async {
+    setState(() => _isLoading = true);
     try {
       final response = await _supabase
           .from('playlist_sound')
+          // Kueri yang diperbaiki: Menggunakan alias 'sound' dan referensi kolom FK 'id_sounds'
           .select('sound:id_sounds(*)')
           .eq('id_playlist', widget.playlistId)
           .order('id', ascending: true);
 
       // Mapping data Supabase ke Model Sound
       final List<Sound> fetchedSounds = response
-          .map((item) => Sound.fromJson(item['sound']))
+          .map((item) => Sound.fromJson(item['sound'] as Map<String, dynamic>))
           .toList();
 
       if (mounted) {
@@ -62,11 +67,161 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     }
   }
 
+  // 🎧 FUNGSI MEMUTAR SEMUA SOUND DALAM PLAYLIST SECARA BERURUTAN
+  void _playAllSounds() async {
+    if (_sounds.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Playlist kosong!')));
+      return;
+    }
+
+    try {
+      final List<AudioSource> audioSources = _sounds.map((s) {
+        return AudioSource.uri(Uri.parse(s.audioUrl), tag: s.title);
+      }).toList();
+
+      final ConcatenatingAudioSource playlistSource = ConcatenatingAudioSource(
+        children: audioSources,
+      );
+
+      await _audioManager.player.stop();
+      await _audioManager.player.setAudioSource(playlistSource);
+      await _audioManager.player.play();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Memutar ${_sounds.length} sound dari playlist "${widget.playlistName}" secara berurutan!',
+            ),
+            backgroundColor: const Color(0xFF535C91),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Gagal memutar playlist: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal memutar playlist. Cek URL audio.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // ❌ FUNGSI MENGHAPUS SOUND DARI PLAYLIST
+  Future<void> _removeSoundFromPlaylist(
+    String soundId,
+    String soundTitle,
+  ) async {
+    try {
+      await _supabase
+          .from('playlist_sound')
+          .delete()
+          .eq('id_playlist', widget.playlistId)
+          .eq('id_sounds', soundId); // Menggunakan id_sounds sebagai FK
+
+      if (mounted) {
+        await _fetchPlaylistSounds();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('"$soundTitle" berhasil dihapus dari playlist.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error removing sound from playlist: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal menghapus sound dari playlist.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // ⚙️ FUNGSI MENAMPILKAN BOTTOM SHEET OPSI SOUND
+  void _showSoundOptionsMenu(Sound sound) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF535C91),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                sound.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            ListTile(
+              leading: const Icon(
+                Icons.play_circle_outline,
+                color: Colors.white,
+              ),
+              title: const Text(
+                'Putar Sound Tunggal',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+
+                await _audioManager.player.stop();
+                await _audioManager.player.setAudioSource(
+                  AudioSource.uri(Uri.parse(sound.audioUrl), tag: sound.title),
+                );
+                await _audioManager.player.play();
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Memutar: ${sound.title}')),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.remove_circle_outline,
+                color: Colors.redAccent,
+              ),
+              title: const Text(
+                'Hapus dari Playlist',
+                style: TextStyle(color: Colors.redAccent),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                await _removeSoundFromPlaylist(sound.id, sound.title);
+              },
+            ),
+            const SizedBox(height: 10),
+          ],
+        );
+      },
+    );
+  }
+
+  // 🎨 UI UTAMA
   @override
   Widget build(BuildContext context) {
     const Color iconColor = Colors.white;
     const Color textColor = Colors.white;
-    const Color backgroundColor = Color(0xFF0F0C2F);
+    const Color backgroundColor = Color(0xFF070F2B);
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -74,7 +229,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Playlist (sesuai desain)
+          // Header Playlist dan Tombol Play
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 16.0,
@@ -91,7 +246,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                       style: TextStyle(fontSize: 16, color: Colors.white60),
                     ),
                     Text(
-                      widget.playlistName, // Nama playlist
+                      widget.playlistName,
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -107,9 +262,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                   ),
                   child: IconButton(
                     icon: Icon(Icons.play_arrow, color: backgroundColor),
-                    onPressed: () {
-                      // Aksi putar playlist
-                    },
+                    onPressed: _playAllSounds,
                   ),
                 ),
               ],
@@ -126,10 +279,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                 : ListView(
                     padding: const EdgeInsets.only(top: 8.0),
                     children: [
-                      // Item "Tambah sound"
                       _buildAddSoundItem(iconColor),
 
-                      // Item-item Sound dari Supabase
                       if (_sounds.isEmpty)
                         const Center(
                           child: Padding(
@@ -145,6 +296,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                           return _SoundListItem(
                             sound: sound,
                             iconColor: iconColor,
+                            onOptionsTap: () => _showSoundOptionsMenu(sound),
+                            onSoundTap: () => _showSoundOptionsMenu(sound),
                           );
                         }).toList(),
                     ],
@@ -162,20 +315,13 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       child: ListTile(
         contentPadding: EdgeInsets.zero,
         leading: Container(
-          // **UKURAN DIPERBESAR**
           width: 60,
           height: 70,
           decoration: BoxDecoration(
-            // Diubah menjadi warna putih agar ikon hitam terlihat jelas
-            color: Color(0xff9290C3),
+            color: const Color(0xff9290C3),
             borderRadius: BorderRadius.circular(8.0),
           ),
-          child: const Icon(
-            Icons.add,
-            // **WARNA DIUBAH MENJADI HITAM**
-            color: Colors.black,
-            size: 30,
-          ),
+          child: const Icon(Icons.add, color: Colors.black, size: 30),
         ),
         title: const Text(
           'Tambah sound',
@@ -185,11 +331,10 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
             fontWeight: FontWeight.w500,
           ),
         ),
-        trailing: const Icon(Icons.more_vert, color: Colors.white54),
+        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white54),
         onTap: () {
-          // Aksi navigasi ke halaman pemilihan Sound untuk ditambahkan
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Buka halaman Add Sound')),
+            const SnackBar(content: Text('Navigasi ke halaman Add Sound')),
           );
         },
       ),
@@ -197,12 +342,20 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   }
 }
 
-// 🎧 Widget untuk setiap item Sound, dimodifikasi untuk menampilkan Gambar dari URL
+// --- WIDGET ITEM DAFTAR SOUND ---
+
 class _SoundListItem extends StatelessWidget {
   final Sound sound;
   final Color iconColor;
+  final VoidCallback onOptionsTap;
+  final VoidCallback onSoundTap;
 
-  const _SoundListItem({required this.sound, required this.iconColor});
+  const _SoundListItem({
+    required this.sound,
+    required this.iconColor,
+    required this.onOptionsTap,
+    required this.onSoundTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -211,22 +364,19 @@ class _SoundListItem extends StatelessWidget {
       child: ListTile(
         contentPadding: EdgeInsets.zero,
         leading: Container(
-          // **UKURAN DIPERBESAR**
           width: 60,
           height: 60,
           decoration: BoxDecoration(
-            color: Color(0xff9290C3),
+            color: const Color(0xff9290C3),
             borderRadius: BorderRadius.circular(8.0),
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8.0),
-            // Menggunakan Image.network untuk memuat gambar dari URL
             child: Image.network(
               sound.imageUrl,
-              fit: BoxFit.cover, // Atur bagaimana gambar akan mengisi container
+              fit: BoxFit.cover,
               loadingBuilder: (context, child, loadingProgress) {
                 if (loadingProgress == null) return child;
-                // Tampilkan loading indicator
                 return Center(
                   child: CircularProgressIndicator(
                     value: loadingProgress.expectedTotalBytes != null
@@ -238,7 +388,6 @@ class _SoundListItem extends StatelessWidget {
                 );
               },
               errorBuilder: (context, error, stackTrace) {
-                // Tampilkan ikon default jika gagal memuat gambar
                 return Icon(
                   Icons.image_not_supported,
                   color: iconColor.withOpacity(0.8),
@@ -256,13 +405,11 @@ class _SoundListItem extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-        trailing: const Icon(Icons.more_vert, color: Colors.white54),
-        onTap: () {
-          // Aksi putar Sound ini
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Memutar: ${sound.title}')));
-        },
+        trailing: IconButton(
+          icon: const Icon(Icons.more_vert, color: Colors.white54),
+          onPressed: onOptionsTap,
+        ),
+        onTap: onSoundTap,
       ),
     );
   }
