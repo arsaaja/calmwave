@@ -1,5 +1,4 @@
 import 'package:calm_wave/common/widget/tab_bar.dart';
-import 'package:calm_wave/pages/dashboard/dashboard.dart';
 import 'package:calm_wave/common/widget/auth_gate.dart';
 import 'package:calm_wave/pages/login.dart';
 import 'package:calm_wave/pages/signup.dart';

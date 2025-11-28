@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 
 class CategoryTabs extends StatefulWidget {
-  // ⚠️ REVISI 1: Mengubah tipe categories menjadi List<Map<String, String>>
   final List<Map<String, String>> categories;
 
-  // ⚠️ REVISI 2: Mengubah onChanged untuk mengembalikan String (ID/UUID)
   final ValueChanged<String> onChanged;
 
   const CategoryTabs({
@@ -32,7 +30,6 @@ class _CategoryTabsState extends State<CategoryTabs> {
           final isSelected = _selectedIndex == index;
 
           return ChoiceChip(
-            // Menggunakan 'name' untuk label yang ditampilkan ke user
             label: Text(category['name']!),
             selected: isSelected,
             onSelected: (selected) {
@@ -40,7 +37,6 @@ class _CategoryTabsState extends State<CategoryTabs> {
                 setState(() {
                   _selectedIndex = index;
                 });
-                // ⚠️ Meneruskan ID (UUID) yang dipilih ke Dashboard
                 widget.onChanged(category['id']!);
               }
             },

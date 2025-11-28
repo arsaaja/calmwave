@@ -42,7 +42,6 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           .eq('id_playlist', widget.playlistId)
           .order('id', ascending: true);
 
-      // Mapping data Supabase ke Model Sound
       final List<Sound> fetchedSounds = response
           .map((item) => Sound.fromJson(item['sound'] as Map<String, dynamic>))
           .toList();
@@ -60,6 +59,36 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Gagal memuat sound playlist.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // 🎧 FUNGSI BARU: MEMUTAR SATU SOUND
+  void _playSingleSound(Sound sound) async {
+    try {
+      await _audioManager.player.stop();
+      await _audioManager.player.setAudioSource(
+        AudioSource.uri(Uri.parse(sound.audioUrl), tag: sound.title),
+      );
+      await _audioManager.player.play();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Memutar: ${sound.title}'),
+            backgroundColor: const Color(0xFF535C91),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Gagal memutar sound tunggal: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal memutar sound. Cek URL audio.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -122,7 +151,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           .from('playlist_sound')
           .delete()
           .eq('id_playlist', widget.playlistId)
-          .eq('id_sounds', soundId); // Menggunakan id_sounds sebagai FK
+          .eq('id_sounds', soundId);
 
       if (mounted) {
         await _fetchPlaylistSounds();
@@ -146,70 +175,63 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     }
   }
 
-  // ⚙️ FUNGSI MENAMPILKAN BOTTOM SHEET OPSI SOUND
+  // ⚙️ FUNGSI BARU: MENAMPILKAN POP UP OPSI SOUND
   void _showSoundOptionsMenu(Sound sound) {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      backgroundColor: const Color(0xFF535C91),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (context) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                sound.title,
-                style: const TextStyle(
+        return AlertDialog(
+          backgroundColor: const Color(0xFF0F0C2F), // Background gelap
+          title: Text(
+            'Opsi: ${sound.title}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 1. Tombol Putar
+              ListTile(
+                leading: const Icon(
+                  Icons.play_circle_outline,
                   color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
                 ),
+                title: const Text(
+                  'Putar Sound Tunggal',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.pop(context); // Tutup pop up
+                  _playSingleSound(sound); // Panggil fungsi putar
+                },
+              ),
+              // 2. Tombol Hapus
+              ListTile(
+                leading: const Icon(
+                  Icons.remove_circle_outline,
+                  color: Colors.redAccent,
+                ),
+                title: const Text(
+                  'Hapus dari Playlist',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+                onTap: () async {
+                  Navigator.pop(context); // Tutup pop up
+                  await _removeSoundFromPlaylist(sound.id, sound.title);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Tutup',
+                style: TextStyle(color: Color(0xff9290C3)),
               ),
             ),
-            const Divider(color: Colors.white12, height: 1),
-            ListTile(
-              leading: const Icon(
-                Icons.play_circle_outline,
-                color: Colors.white,
-              ),
-              title: const Text(
-                'Putar Sound Tunggal',
-                style: TextStyle(color: Colors.white),
-              ),
-              onTap: () async {
-                Navigator.pop(context);
-
-                await _audioManager.player.stop();
-                await _audioManager.player.setAudioSource(
-                  AudioSource.uri(Uri.parse(sound.audioUrl), tag: sound.title),
-                );
-                await _audioManager.player.play();
-
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Memutar: ${sound.title}')),
-                  );
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.remove_circle_outline,
-                color: Colors.redAccent,
-              ),
-              title: const Text(
-                'Hapus dari Playlist',
-                style: TextStyle(color: Colors.redAccent),
-              ),
-              onTap: () async {
-                Navigator.pop(context);
-                await _removeSoundFromPlaylist(sound.id, sound.title);
-              },
-            ),
-            const SizedBox(height: 10),
           ],
         );
       },
@@ -221,7 +243,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   Widget build(BuildContext context) {
     const Color iconColor = Colors.white;
     const Color textColor = Colors.white;
-    const Color backgroundColor = Color(0xFF070F2B);
+    const Color backgroundColor = Color(0xFF0F0C2F);
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -229,7 +251,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Playlist dan Tombol Play
+          // Header Playlist dan Tombol Play All
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 16.0,
@@ -296,10 +318,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                           return _SoundListItem(
                             sound: sound,
                             iconColor: iconColor,
+                            // 🎯 KLIK ICON: Membuka Pop Up Opsi
                             onOptionsTap: () => _showSoundOptionsMenu(sound),
-                            onSoundTap: () => _showSoundOptionsMenu(sound),
+                            // 🎯 KLIK ITEM: Langsung Putar Sound
+                            onSoundTap: () => _playSingleSound(sound),
                           );
-                        }).toList(),
+                        }),
                     ],
                   ),
           ),
@@ -308,7 +332,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     );
   }
 
-  // Widget untuk tombol "Tambah Sound"
+  // Widget untuk tombol "Tambah Sound" (Tidak Berubah)
   Widget _buildAddSoundItem(Color iconColor) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -342,7 +366,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   }
 }
 
-// --- WIDGET ITEM DAFTAR SOUND ---
+// --- WIDGET ITEM DAFTAR SOUND (Tidak Berubah, hanya penggunaan callback yang berubah) ---
 
 class _SoundListItem extends StatelessWidget {
   final Sound sound;
@@ -407,9 +431,9 @@ class _SoundListItem extends StatelessWidget {
         ),
         trailing: IconButton(
           icon: const Icon(Icons.more_vert, color: Colors.white54),
-          onPressed: onOptionsTap,
+          onPressed: onOptionsTap, // Memanggil _showSoundOptionsMenu
         ),
-        onTap: onSoundTap,
+        onTap: onSoundTap, // Memanggil _playSingleSound
       ),
     );
   }
