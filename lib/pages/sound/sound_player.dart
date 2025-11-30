@@ -211,12 +211,6 @@ class _SoundPlayerState extends State<SoundPlayer> {
       );
     } catch (e) {
       debugPrint("Gagal ambil playlist: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.red,
-          content: Text("Gagal memuat playlist."),
-        ),
-      );
     }
   }
 

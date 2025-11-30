@@ -37,7 +37,6 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     try {
       final response = await _supabase
           .from('playlist_sound')
-          // Kueri yang diperbaiki: Menggunakan alias 'sound' dan referensi kolom FK 'id_sounds'
           .select('sound:id_sounds(*)')
           .eq('id_playlist', widget.playlistId)
           .order('id', ascending: true);
@@ -56,52 +55,22 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       debugPrint('Error fetching playlist sounds: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal memuat sound playlist.'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
     }
   }
 
-  // 🎧 FUNGSI BARU: MEMUTAR SATU SOUND
-  void _playSingleSound(Sound sound) async {
-    try {
-      await _audioManager.player.stop();
-      await _audioManager.player.setAudioSource(
-        AudioSource.uri(Uri.parse(sound.audioUrl), tag: sound.title),
-      );
-      await _audioManager.player.play();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Memutar: ${sound.title}'),
-            backgroundColor: const Color(0xFF535C91),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint("Gagal memutar sound tunggal: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal memutar sound. Cek URL audio.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  // 🎧 FUNGSI MEMUTAR SEMUA SOUND DALAM PLAYLIST SECARA BERURUTAN
+  // 🎧 FUNGSI MEMUTAR SEMUA SOUND DALAM PLAYLIST SECARA BERURUTAN (Diperbarui)
   void _playAllSounds() async {
+    // Jika player sedang dijeda, lanjutkan (resume)
+    if (_audioManager.player.processingState == ProcessingState.ready &&
+        !_audioManager.player.playing) {
+      await _audioManager.player.play();
+      if (mounted) {}
+      return;
+    }
+
+    // Jika playlist kosong atau sudah memutar playlist yang sama, jangan lakukan apa-apa
     if (_sounds.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Playlist kosong!')));
       return;
     }
 
@@ -114,34 +83,43 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         children: audioSources,
       );
 
+      // Reset dan set audio source baru
       await _audioManager.player.stop();
       await _audioManager.player.setAudioSource(playlistSource);
       await _audioManager.player.play();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Memutar ${_sounds.length} sound dari playlist "${widget.playlistName}" secara berurutan!',
-            ),
-            backgroundColor: const Color(0xFF535C91),
-          ),
-        );
-      }
+      if (mounted) {}
     } catch (e) {
       debugPrint("Gagal memutar playlist: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal memutar playlist. Cek URL audio.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (mounted) {}
     }
   }
 
-  // ❌ FUNGSI MENGHAPUS SOUND DARI PLAYLIST
+  // ⏸️ FUNGSI BARU: MENJEDA SEMUA SOUND DALAM PLAYLIST
+  void _pauseAllSounds() async {
+    await _audioManager.player.pause();
+    if (mounted) {}
+  }
+
+  // 🎧 FUNGSI MEMUTAR SATU SOUND (Diperbarui: Hentikan putaran playlist jika ada)
+  void _playSingleSound(Sound sound) async {
+    try {
+      // Hentikan putaran saat ini (baik single sound atau playlist)
+      await _audioManager.player.stop();
+
+      await _audioManager.player.setAudioSource(
+        AudioSource.uri(Uri.parse(sound.audioUrl), tag: sound.title),
+      );
+      await _audioManager.player.play();
+
+      if (mounted) {}
+    } catch (e) {
+      debugPrint("Gagal memutar sound tunggal: $e");
+      if (mounted) {}
+    }
+  }
+
+  // ❌ FUNGSI MENGHAPUS SOUND DARI PLAYLIST (Tidak Berubah)
   Future<void> _removeSoundFromPlaylist(
     String soundId,
     String soundTitle,
@@ -155,27 +133,14 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
 
       if (mounted) {
         await _fetchPlaylistSounds();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('"$soundTitle" berhasil dihapus dari playlist.'),
-            backgroundColor: Colors.green,
-          ),
-        );
       }
     } catch (e) {
       debugPrint('Error removing sound from playlist: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal menghapus sound dari playlist.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (mounted) {}
     }
   }
 
-  // ⚙️ FUNGSI BARU: MENAMPILKAN POP UP OPSI SOUND
+  // ⚙️ FUNGSI BARU: MENAMPILKAN POP UP OPSI SOUND (Tidak Berubah)
   void _showSoundOptionsMenu(Sound sound) {
     showDialog(
       context: context,
@@ -238,7 +203,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     );
   }
 
-  // 🎨 UI UTAMA
+  // 🎨 UI UTAMA (Bagian Tombol Play/Pause Diubah)
   @override
   Widget build(BuildContext context) {
     const Color iconColor = Colors.white;
@@ -251,7 +216,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Playlist dan Tombol Play All
+          // Header Playlist dan Tombol Play/Pause All (Diubah di bawah)
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 16.0,
@@ -277,22 +242,48 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                     ),
                   ],
                 ),
-                Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: Icon(Icons.play_arrow, color: backgroundColor),
-                    onPressed: _playAllSounds,
-                  ),
+                // 🎯 BAGIAN YANG DIUBAH: Menggunakan StreamBuilder
+                StreamBuilder<PlayerState>(
+                  stream: _audioManager.player.playerStateStream,
+                  builder: (context, snapshot) {
+                    final playerState = snapshot.data;
+                    final processingState = playerState?.processingState;
+                    final playing = playerState?.playing ?? false;
+
+                    // Tentukan apakah sedang diputar (tidak dalam keadaan stopped/completed)
+                    final bool isPlayingPlaylist =
+                        playing &&
+                        (processingState != ProcessingState.completed) &&
+                        (processingState != ProcessingState.idle);
+
+                    // Tentukan fungsi yang akan dipanggil
+                    final VoidCallback onPressedHandler = isPlayingPlaylist
+                        ? _pauseAllSounds
+                        : _playAllSounds;
+
+                    // Tentukan ikon yang akan ditampilkan
+                    final IconData icon = isPlayingPlaylist
+                        ? Icons.pause
+                        : Icons.play_arrow;
+
+                    return Container(
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: Icon(icon, color: backgroundColor),
+                        onPressed: onPressedHandler,
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
           ),
           const Divider(color: Colors.white12, thickness: 1, height: 1),
 
-          // Daftar Sound
+          // Daftar Sound (Tidak Berubah)
           Expanded(
             child: _isLoading
                 ? const Center(
@@ -318,9 +309,9 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                           return _SoundListItem(
                             sound: sound,
                             iconColor: iconColor,
-                            // 🎯 KLIK ICON: Membuka Pop Up Opsi
+                            // KLIK ICON: Membuka Pop Up Opsi
                             onOptionsTap: () => _showSoundOptionsMenu(sound),
-                            // 🎯 KLIK ITEM: Langsung Putar Sound
+                            // KLIK ITEM: Langsung Putar Sound
                             onSoundTap: () => _playSingleSound(sound),
                           );
                         }),
@@ -356,17 +347,13 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           ),
         ),
         trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white54),
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Navigasi ke halaman Add Sound')),
-          );
-        },
+        onTap: () {},
       ),
     );
   }
 }
 
-// --- WIDGET ITEM DAFTAR SOUND (Tidak Berubah, hanya penggunaan callback yang berubah) ---
+// --- WIDGET ITEM DAFTAR SOUND (Tidak Berubah) ---
 
 class _SoundListItem extends StatelessWidget {
   final Sound sound;

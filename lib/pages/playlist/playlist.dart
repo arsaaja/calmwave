@@ -47,12 +47,6 @@ class _PlaylistState extends State<Playlist> {
       debugPrint('Error fetching playlists: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal memuat data playlist.'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
     }
   }
@@ -225,12 +219,6 @@ class _PlaylistState extends State<Playlist> {
                 });
 
                 if (context.mounted) Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Nama playlist diperbarui'),
-                    backgroundColor: Color(0xFF535C91),
-                  ),
-                );
               },
               child: const Text(
                 'Simpan',
@@ -287,23 +275,10 @@ class _PlaylistState extends State<Playlist> {
         setState(() {
           _playlists.removeWhere((p) => p['id'] == id);
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Playlist berhasil dihapus'),
-            backgroundColor: Color(0xFF535C91),
-          ),
-        );
       }
     } catch (e) {
       debugPrint('Error deleting playlist: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal menghapus playlist'),
-            backgroundColor: Color(0xFF535C91),
-          ),
-        );
-      }
+      if (mounted) {}
     }
   }
 
