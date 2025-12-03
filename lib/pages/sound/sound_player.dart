@@ -30,19 +30,27 @@ class _SoundPlayerState extends State<SoundPlayer> {
   void didUpdateWidget(covariant SoundPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    // 🌟 MEMAKSA MEMUTAR AUDIO BARU 🌟
     if (widget.audioUrl != null && widget.audioUrl != oldWidget.audioUrl) {
       _audioManager.player.stop();
       _audioManager.player.setUrl(widget.audioUrl!).then((_) {
         _audioManager.player.play();
-        setState(() => isPlaying = true);
+        // isPlaying akan diperbarui oleh listener di bawah
       });
     }
   }
 
   Future<void> _initPlayer() async {
     try {
+      if (widget.audioUrl == null) return;
+
       if (_audioManager.player.audioSource == null) {
         await _audioManager.player.setUrl(widget.audioUrl!);
+      }
+
+      // 🌟 MEMAKSA PLAY (Jika tidak sedang bermain) 🌟
+      if (!_audioManager.player.playing) {
+        await _audioManager.player.play();
       }
 
       setState(() {
@@ -69,34 +77,36 @@ class _SoundPlayerState extends State<SoundPlayer> {
   }
 
   Future<void> _togglePlay() async {
-    // Ganti kondisi cek HANYA player default
-    // MENJADI cek apakah ADA player yang sedang bermain (player default ATAU mixed)
+    // Memeriksa status global untuk Global Pause/Play
     if (_audioManager.isAnyAudioPlaying) {
-      // Jika ADA yang bermain, lakukan PAUSE GLOBAL
       await _audioManager.pauseAll();
     } else {
-      // Jika TIDAK ADA yang bermain (atau semua di-pause), lakukan PLAY GLOBAL
       await _audioManager.playAll();
     }
 
-    // Penting: Anda mungkin juga perlu memastikan `isPlaying` (state lokal)
-    // di SoundPlayer tetap mencerminkan status player default untuk ikon tombol.
     setState(() {
       isPlaying = _audioManager.player.playing;
-      // isPlaying di sini tetap melacak status background player,
-      // yang diharapkan berfungsi sebagai indikator visual utama.
     });
   }
 
   Future<void> _toggleMute() async {
+    // Logika Mute yang diperbarui untuk mempertahankan volume terakhir
     final newMuted = !isMuted;
-    await _audioManager.player.setVolume(
-      newMuted ? 0 : (volume > 0 ? volume : 0.5),
-    );
+
+    if (newMuted) {
+      // Mute
+      await _audioManager.player.setVolume(0);
+    } else {
+      // Unmute: kembali ke volume terakhir atau 0.5
+      final targetVolume = volume > 0 ? volume : 0.5;
+      await _audioManager.player.setVolume(targetVolume);
+    }
+
+    // setState akan dipicu oleh volumeStream listener, tapi tetap jaga untuk kepastian UI
     setState(() => isMuted = newMuted);
   }
 
-  // BOTTOM SHEET LIST PLAYLIST
+  // BOTTOM SHEET LIST PLAYLIST (Tidak ada perubahan)
   Future<void> _showPlaylistBottomSheet() async {
     final user = supabase.auth.currentUser;
     if (user == null) {
@@ -226,7 +236,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
     }
   }
 
-  // BOTTOM SHEET BUAT PLAYLIST BARU
+  // BOTTOM SHEET BUAT PLAYLIST BARU (Tidak ada perubahan)
   Future<void> _showCreatePlaylistSheet() async {
     final controller = TextEditingController();
     final user = supabase.auth.currentUser;
@@ -308,7 +318,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
     );
   }
 
-  // ADD SOUND KE PLAYLIST
+  // ADD SOUND KE PLAYLIST (Tidak ada perubahan)
   Future<void> _addSoundToPlaylist({
     required String playlistId,
     required String playlistName,
@@ -331,7 +341,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
             backgroundColor: Colors.orange,
           ),
         );
-        Navigator.pop(context);
+        if (context.mounted) Navigator.pop(context);
         return;
       }
 
@@ -347,7 +357,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
         ),
       );
 
-      Navigator.pop(context);
+      if (context.mounted) Navigator.pop(context);
     } catch (e) {
       debugPrint("Gagal menambah sound ke playlist: $e");
 
@@ -360,7 +370,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
     }
   }
 
-  // UI MINI PLAYER
+  // UI MINI PLAYER (Tidak ada perubahan)
   @override
   Widget build(BuildContext context) {
     return Container(

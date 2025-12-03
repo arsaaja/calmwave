@@ -21,6 +21,7 @@ class PlaylistDetailPage extends StatefulWidget {
 
 class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   final SupabaseClient _supabase = Supabase.instance.client;
+  // Pastikan AudioManager memiliki fungsi pauseAllMixedSounds()
   final AudioManager _audioManager = AudioManager.instance;
   List<Sound> _sounds = [];
   bool _isLoading = true;
@@ -59,63 +60,67 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     }
   }
 
-  // 🎧 FUNGSI MEMUTAR SEMUA SOUND DALAM PLAYLIST SECARA BERURUTAN (Diperbarui)
+  // 🎧 FUNGSI MEMUTAR SEMUA SOUND DALAM PLAYLIST SECARA BERURUTAN (DIREVISI)
   void _playAllSounds() async {
-    // Jika player sedang dijeda, lanjutkan (resume)
-    if (_audioManager.player.processingState == ProcessingState.ready &&
-        !_audioManager.player.playing) {
-      await _audioManager.player.play();
-      if (mounted) {}
-      return;
-    }
-
-    // Jika playlist kosong atau sudah memutar playlist yang sama, jangan lakukan apa-apa
     if (_sounds.isEmpty) {
       return;
     }
 
+    final playerState = _audioManager.player.playerState;
+    final processingState = playerState.processingState;
+    final playing = playerState.playing;
+
     try {
+      // 1. Jika player sedang di-PAUSE dan sudah dimuat (ready), kita lanjutkan (resume)
+      if (processingState == ProcessingState.ready && !playing) {
+        await _audioManager.player.play();
+        return;
+      }
+
+      // 2. Hentikan semua player campuran sebelum memulai playlist baru (PENTING!)
+      await _audioManager.pauseAllMixedSounds();
+      await _audioManager.player.stop();
+
       final List<AudioSource> audioSources = _sounds.map((s) {
         return AudioSource.uri(Uri.parse(s.audioUrl), tag: s.title);
       }).toList();
 
+      // 🌟 PERBAIKAN DI SINI: useLooping dihapus 🌟
       final ConcatenatingAudioSource playlistSource = ConcatenatingAudioSource(
         children: audioSources,
       );
 
       // Reset dan set audio source baru
-      await _audioManager.player.stop();
       await _audioManager.player.setAudioSource(playlistSource);
+      // Atur LoopMode ke off agar playlist tidak berulang secara otomatis
+      await _audioManager.player.setLoopMode(LoopMode.off);
       await _audioManager.player.play();
-
-      if (mounted) {}
     } catch (e) {
       debugPrint("Gagal memutar playlist: $e");
-      if (mounted) {}
     }
   }
 
   // ⏸️ FUNGSI BARU: MENJEDA SEMUA SOUND DALAM PLAYLIST
   void _pauseAllSounds() async {
     await _audioManager.player.pause();
-    if (mounted) {}
   }
 
-  // 🎧 FUNGSI MEMUTAR SATU SOUND (Diperbarui: Hentikan putaran playlist jika ada)
+  // 🎧 FUNGSI MEMUTAR SATU SOUND (DIREVISI)
   void _playSingleSound(Sound sound) async {
     try {
-      // Hentikan putaran saat ini (baik single sound atau playlist)
+      // 1. Hentikan semua player campuran (PENTING!)
+      await _audioManager.pauseAllMixedSounds();
+
+      // 2. Hentikan putaran saat ini (baik single sound atau playlist)
       await _audioManager.player.stop();
 
+      // 3. Set source baru (single sound) dan putar
       await _audioManager.player.setAudioSource(
         AudioSource.uri(Uri.parse(sound.audioUrl), tag: sound.title),
       );
       await _audioManager.player.play();
-
-      if (mounted) {}
     } catch (e) {
       debugPrint("Gagal memutar sound tunggal: $e");
-      if (mounted) {}
     }
   }
 
@@ -136,7 +141,6 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       }
     } catch (e) {
       debugPrint('Error removing sound from playlist: $e');
-      if (mounted) {}
     }
   }
 
@@ -203,7 +207,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     );
   }
 
-  // 🎨 UI UTAMA (Bagian Tombol Play/Pause Diubah)
+  // 🎨 UI UTAMA
   @override
   Widget build(BuildContext context) {
     const Color iconColor = Colors.white;
@@ -216,7 +220,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Playlist dan Tombol Play/Pause All (Diubah di bawah)
+          // Header Playlist dan Tombol Play/Pause All (Menggunakan StreamBuilder)
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 16.0,
@@ -242,19 +246,19 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                     ),
                   ],
                 ),
-                // 🎯 BAGIAN YANG DIUBAH: Menggunakan StreamBuilder
+                // 🎯 StreamBuilder untuk Ikon Play/Pause
                 StreamBuilder<PlayerState>(
                   stream: _audioManager.player.playerStateStream,
                   builder: (context, snapshot) {
                     final playerState = snapshot.data;
-                    final processingState = playerState?.processingState;
                     final playing = playerState?.playing ?? false;
 
-                    // Tentukan apakah sedang diputar (tidak dalam keadaan stopped/completed)
+                    // Tentukan apakah player utama sedang memutar audio (bukan idle atau completed)
                     final bool isPlayingPlaylist =
                         playing &&
-                        (processingState != ProcessingState.completed) &&
-                        (processingState != ProcessingState.idle);
+                        (playerState?.processingState !=
+                            ProcessingState.completed) &&
+                        (playerState?.processingState != ProcessingState.idle);
 
                     // Tentukan fungsi yang akan dipanggil
                     final VoidCallback onPressedHandler = isPlayingPlaylist

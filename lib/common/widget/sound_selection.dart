@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:calm_wave/models/sound_model.dart';
+import 'package:calm_wave/models/sound_model.dart'; // Pastikan path model SoundModel Anda benar
 
 class SoundSelectionDialog extends StatefulWidget {
   // Menerima daftar SoundItem dengan status isSelected dan volume saat ini
@@ -62,6 +62,11 @@ class _SoundSelectionDialogState extends State<SoundSelectionDialog> {
               },
               activeColor: Colors.blueAccent,
               checkColor: Colors.white,
+              // 🆕 Properti 'side' untuk mengubah warna border menjadi putih
+              side: const BorderSide(
+                color: Colors.white, // Warna bingkai (border)
+                width: 2.0, // Ketebalan bingkai
+              ),
             ),
             onTap: () {
               setState(() {
@@ -91,7 +96,7 @@ class _SoundSelectionDialogState extends State<SoundSelectionDialog> {
                           item.volume = value;
                         });
                       },
-                      activeColor: Colors.lightGreen,
+                      activeColor: const Color(0xFF9290C3),
                       inactiveColor: Colors.white30,
                     ),
                   ),
