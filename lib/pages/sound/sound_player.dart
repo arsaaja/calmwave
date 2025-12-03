@@ -69,11 +69,23 @@ class _SoundPlayerState extends State<SoundPlayer> {
   }
 
   Future<void> _togglePlay() async {
-    if (_audioManager.player.playing) {
-      await _audioManager.player.pause();
+    // Ganti kondisi cek HANYA player default
+    // MENJADI cek apakah ADA player yang sedang bermain (player default ATAU mixed)
+    if (_audioManager.isAnyAudioPlaying) {
+      // Jika ADA yang bermain, lakukan PAUSE GLOBAL
+      await _audioManager.pauseAll();
     } else {
-      await _audioManager.player.play();
+      // Jika TIDAK ADA yang bermain (atau semua di-pause), lakukan PLAY GLOBAL
+      await _audioManager.playAll();
     }
+
+    // Penting: Anda mungkin juga perlu memastikan `isPlaying` (state lokal)
+    // di SoundPlayer tetap mencerminkan status player default untuk ikon tombol.
+    setState(() {
+      isPlaying = _audioManager.player.playing;
+      // isPlaying di sini tetap melacak status background player,
+      // yang diharapkan berfungsi sebagai indikator visual utama.
+    });
   }
 
   Future<void> _toggleMute() async {

@@ -1,44 +1,174 @@
 import 'package:just_audio/just_audio.dart';
+import 'package:flutter/foundation.dart';
 
 class AudioManager {
   AudioManager._internal();
   static final AudioManager _instance = AudioManager._internal();
   static AudioManager get instance => _instance;
 
-  // player default, supaya kode lama tetap jalan
+  // Batasan Maksimal Sound Campuran
+  static const int MAX_MIXED_SOUNDS = 3;
+
+  // player default (digunakan oleh SoundPlayer/Mini Player untuk Lagu Tunggal)
   AudioPlayer player = AudioPlayer();
 
-  // Map untuk multi-sound (jangan ganggu player default)
+  // Map untuk multi-sound (sound campuran: mic, keyboard, dll.)
   final Map<String, AudioPlayer> _players = {};
 
   AudioPlayer getPlayer(String soundId) {
     if (!_players.containsKey(soundId)) {
       _players[soundId] = AudioPlayer();
+      _players[soundId]!.setLoopMode(LoopMode.one);
     }
     return _players[soundId]!;
   }
 
+  // --- Kontrol Global (Untuk SoundPlayer/Mini Player) ---
+
+  // 🆕 Metode untuk PAUSE SEMUA AUDIO (Lagu Tunggal + Campuran)
+  Future<void> pauseAll() async {
+    // Pause player default (Lagu Tunggal)
+    if (player.playing) {
+      await player.pause();
+    }
+
+    // Pause semua player campuran
+    for (var p in _players.values) {
+      if (p.playing) {
+        await p.pause();
+      }
+    }
+    debugPrint('GLOBAL CONTROL: Semua audio di-pause.');
+  }
+
+  // 🆕 Metode untuk PLAY SEMUA AUDIO (Lagu Tunggal + Campuran)
+  Future<void> playAll() async {
+    // Play player default (Lagu Tunggal), jika sudah di-set
+    if (player.processingState != ProcessingState.idle && !player.playing) {
+      await player.play();
+    }
+
+    // Play semua player campuran yang aktif
+    for (var p in _players.values) {
+      if (p.processingState != ProcessingState.idle && !p.playing) {
+        await p.play();
+      }
+    }
+    debugPrint('GLOBAL CONTROL: Semua audio di-play.');
+  }
+
+  // --- Metode Sound Campuran (Diakses dari Pop-up/Grid) ---
+
+  int get activeMixedSoundCount => _players.length;
+
+  Future<void> playMixedSound({
+    required String soundId,
+    required String url,
+    required double volume,
+  }) async {
+    final bool isNew = !_players.containsKey(soundId);
+
+    if (isNew && activeMixedSoundCount >= MAX_MIXED_SOUNDS) {
+      debugPrint('GAGAL: Batas $MAX_MIXED_SOUNDS sound campuran tercapai.');
+      throw Exception(
+        'Maksimal $MAX_MIXED_SOUNDS sound campuran yang dapat dimainkan.',
+      );
+    }
+
+    final p = getPlayer(soundId);
+
+    if (isNew) {
+      await p.setUrl(url);
+    }
+
+    await p.setVolume(volume);
+
+    if (!p.playing) {
+      await p.play();
+      debugPrint('MIXED: Memutar sound baru: $soundId dengan Volume: $volume');
+    } else {
+      debugPrint('MIXED: Volume $soundId diupdate ke $volume');
+    }
+  }
+
+  Future<void> stopMixedSound(String soundId) async {
+    final p = _players.remove(soundId);
+    if (p != null) {
+      await p.stop();
+      await p.dispose();
+      debugPrint('MIXED: Sound $soundId dihentikan dan dispose.');
+    }
+  }
+
+  Future<void> stopAllMixedSounds() async {
+    debugPrint('MIXED: Menghentikan semua mixed sounds...');
+    final List<String> activeIds = _players.keys.toList();
+    for (String id in activeIds) {
+      await stopMixedSound(id);
+    }
+  }
+
+  // --- Metode Lagu Tunggal (Lama) ---
+
+  Future<void> setAudioUrlDefault(String url) async {
+    if (player.audioSource != null) {
+      await player.stop();
+    }
+    await player.setUrl(url);
+  }
+
+  void playPauseDefault() {
+    if (player.playing) {
+      player.pause();
+    } else {
+      player.play();
+    }
+  }
+
+  // --- Dispose ---
+
+  @override
+  void dispose() {
+    stopAllMixedSounds(); // Membersihkan semua sound campuran
+    player.dispose(); // Player default
+    debugPrint('AudioManager dispose complete.');
+  }
+
+  // Method lama (Disederhanakan untuk kompatibilitas)
   Future<void> setAudioUrl(String soundId, String url) async {
     if (soundId == "default") {
-      await player.setUrl(url);
+      await setAudioUrlDefault(url);
     } else {
       await getPlayer(soundId).setUrl(url);
     }
   }
 
   void playPause({String soundId = "default"}) {
-    final p = soundId == "default" ? player : getPlayer(soundId);
-    if (p.playing) {
-      p.pause();
+    if (soundId == "default") {
+      playPauseDefault();
     } else {
-      p.play();
+      final p = getPlayer(soundId);
+      if (p.playing) {
+        p.pause();
+      } else {
+        p.play();
+      }
     }
   }
 
-  void dispose() {
-    player.dispose();
-    for (var p in _players.values) {
-      p.dispose();
+  bool get isAnyAudioPlaying {
+    // 1. Cek player default
+    if (player.playing) {
+      return true;
     }
+
+    // 2. Cek semua player campuran
+    for (var p in _players.values) {
+      if (p.playing) {
+        return true;
+      }
+    }
+
+    return false;
   }
 }

@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
-import 'dart:async'; // Diperlukan untuk StreamSubscription
-import 'package:supabase_flutter/supabase_flutter.dart'; // Diperlukan untuk Auth
+import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+// Import komponen pendukung (Ganti path sesuai proyek Anda)
+import 'package:calm_wave/pages/sound/audio_manager.dart'; // AudioManager yang sudah dimodifikasi
+import 'package:calm_wave/models/sound_model.dart'; // Model Sound
+import 'package:calm_wave/common/widget/sound_selection.dart'; // SoundSelectionDialog
 import 'package:calm_wave/pages/dashboard/dashboard.dart';
 import 'package:calm_wave/pages/playlist/playlist.dart';
 import 'package:calm_wave/pages/profile/profile.dart';
 import 'package:calm_wave/pages/timer/timer.dart';
 
 // --- KELAS POPUP (DIASUMSIKAN ADA) ---
-// Kelas ini harus ada di file Anda atau di-import dari lokasi yang benar
 class PopUp {
   static void show(BuildContext context) {
     showDialog(
@@ -45,7 +49,6 @@ class PopUp {
               ),
               onPressed: () {
                 Navigator.pop(context);
-                // Navigasi ke halaman login Anda
                 Navigator.pushReplacementNamed(context, '/login');
               },
               child: const Text("Login"),
@@ -58,7 +61,7 @@ class PopUp {
 }
 
 // ------------------------------------------
-//           CUSTOM TAB BAR UTAMA
+//           CUSTOM TAB BAR UTAMA
 // ------------------------------------------
 
 class CustomTabBar extends StatefulWidget {
@@ -69,51 +72,191 @@ class CustomTabBar extends StatefulWidget {
 }
 
 class _CustomTabBarState extends State<CustomTabBar> {
+  // State Navigasi & Auth
   int currentTab = 0;
-
-  // Status login yang akan diperbarui oleh listener Supabase
   bool _isLoggedIn = false;
   StreamSubscription<AuthState>? _authStateSubscription;
 
-  // Daftar Index Halaman
-  final List<Widget> screens = [
-    const Dashboard(), // Index 0: Dashboard (Akses Publik)
-    const Playlist(), // Index 1: Membutuhkan Login
-    const Timer(), // Index 2: Membutuhkan Login
-    const Profile(), // Index 3: Membutuhkan Login
-  ];
+  // State Audio
+  final AudioManager _audioManager = AudioManager.instance;
+  List<Sound> _allSounds = [];
+  bool _isLoadingSounds = true;
+  static const String _defaultBackgroundSoundId =
+      'music_default'; // ID untuk background music
 
-  // Daftar index yang memerlukan login (1, 2, 3)
+  // Daftar index halaman dan index yang memerlukan login
+  final List<Widget> screens = [
+    const Dashboard(),
+    const Playlist(),
+    const Timer(),
+    const Profile(),
+  ];
   final List<int> requiresLogin = [1, 2, 3];
 
   @override
   void initState() {
     super.initState();
-    // 1. Cek status awal saat widget dibuat
     _checkAuthStatus();
-    // 2. Dengarkan perubahan status auth Supabase
     _listenToAuthChanges();
+    // 1. Ambil semua sound saat inisialisasi
+    _fetchAllSounds();
   }
 
   @override
   void dispose() {
-    // Batalkan subscription ketika widget dihapus
     _authStateSubscription?.cancel();
+    // 2. Penting: Stop semua mixed sound saat CustomTabBar di-dispose (misalnya saat keluar aplikasi)
+    _audioManager.stopAllMixedSounds();
+    _audioManager.dispose();
     super.dispose();
   }
 
-  // --- LOGIKA OTENTIKASI ---
+  // =================================================================
+  // 🎙️ LOGIKA AUDIO & DATA
+  // =================================================================
 
-  // Fungsi untuk cek status awal
+  Future<void> _fetchAllSounds() async {
+    setState(() {
+      _isLoadingSounds = true;
+    });
+    try {
+      // Ambil data dari Supabase (asumsi tabel 'sounds')
+      final response = await Supabase.instance.client
+          .from('sounds')
+          .select('id, judul, audio_url, image_url');
+
+      final List<Sound> fetchedSounds = List<Map<String, dynamic>>.from(
+        response,
+      ).map((data) => Sound.fromJson(data)).toList();
+
+      setState(() {
+        _allSounds = fetchedSounds;
+        _isLoadingSounds = false;
+      });
+    } catch (e) {
+      debugPrint("Error fetching all sounds for PopUp: $e");
+      setState(() {
+        _isLoadingSounds = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal memuat daftar sound dari server.'),
+          ),
+        );
+      }
+    }
+  }
+
+  // --- HANDLER SELECTION DARI POPUP/GRID ---
+  void _handleSelectionConfirmed(List<Sound> updatedSounds) {
+    const int MAX_SOUNDS = AudioManager.MAX_MIXED_SOUNDS; // Batas 3
+    final selectedMixedSounds = updatedSounds
+        .where((s) => s.isSelected && s.id != _defaultBackgroundSoundId)
+        .toList();
+
+    // 1. Terapkan Batas 3 Sound Campuran
+    if (selectedMixedSounds.length > MAX_SOUNDS) {
+      // Nonaktifkan sound ke-4 dan seterusnya
+      for (int i = MAX_SOUNDS; i < selectedMixedSounds.length; i++) {
+        selectedMixedSounds[i].isSelected = false;
+        _stopAudio(selectedMixedSounds[i].id);
+      }
+      _showLimitWarning(context);
+    }
+
+    setState(() {
+      _allSounds = updatedSounds;
+
+      // 2. Perbarui Audio Manager
+      _updateAudioManager();
+    });
+  }
+
+  // --- LOGIKA PLAYBACK KE AUDIO MANAGER ---
+  void _updateAudioManager() {
+    // Loop untuk mixed sounds
+    for (var sound in _allSounds.where(
+      (s) => s.id != _defaultBackgroundSoundId,
+    )) {
+      if (sound.isSelected) {
+        _playAudio(sound);
+      } else {
+        _stopAudio(sound.id);
+      }
+    }
+
+    // Loop untuk background music
+    final bgMusic = _allSounds.firstWhereOrNull(
+      (s) => s.id == _defaultBackgroundSoundId,
+    );
+    if (bgMusic != null) {
+      if (bgMusic.isSelected) {
+        _playAudio(bgMusic);
+      } else {
+        _stopAudio(bgMusic.id);
+      }
+    }
+  }
+
+  void _playAudio(Sound sound) {
+    try {
+      if (sound.id == _defaultBackgroundSoundId) {
+        // Background Music: Gunakan player default
+        _audioManager.setAudioUrlDefault(sound.audioUrl).then((_) {
+          _audioManager.player.setVolume(sound.volume); // Set volume background
+          _audioManager.playPauseDefault();
+        });
+      } else {
+        // Sound Campuran: Gunakan multi-player (dengan batasan 3)
+        _audioManager.playMixedSound(
+          soundId: sound.id,
+          url: sound.audioUrl,
+          volume: sound.volume,
+        );
+      }
+    } on Exception catch (e) {
+      // Tangani jika batasan 3 sound tercapai di AudioManager
+      debugPrint('PLAY GAGAL: $e');
+      _showLimitWarning(context);
+
+      // Sinkronkan kembali model di UI
+      setState(() {
+        final failedSound = _allSounds.firstWhere((s) => s.id == sound.id);
+        failedSound.isSelected = false;
+      });
+    }
+  }
+
+  void _stopAudio(String soundId) {
+    if (soundId == _defaultBackgroundSoundId) {
+      _audioManager.player.pause();
+    } else {
+      _audioManager.stopMixedSound(soundId);
+    }
+  }
+
+  void _showLimitWarning(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Hanya bisa memilih maksimal 3 sound campuran.'),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  // =================================================================
+  // 🔐 LOGIKA OTENTIKASI
+  // =================================================================
+
   void _checkAuthStatus() {
-    // Mendapatkan user saat ini dari Supabase
     final user = Supabase.instance.client.auth.currentUser;
     setState(() {
       _isLoggedIn = user != null;
     });
   }
 
-  // Fungsi untuk mendengarkan perubahan status Supabase secara real-time
   void _listenToAuthChanges() {
     _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange
         .listen((data) {
@@ -122,11 +265,8 @@ class _CustomTabBarState extends State<CustomTabBar> {
 
           if (event == AuthChangeEvent.signedIn ||
               event == AuthChangeEvent.signedOut) {
-            // Perbarui state _isLoggedIn dan UI
             setState(() {
               _isLoggedIn = session != null;
-
-              // Jika pengguna logout, paksa kembali ke Dashboard (Index 0)
               if (!_isLoggedIn && currentTab != 0) {
                 currentTab = 0;
               }
@@ -135,11 +275,12 @@ class _CustomTabBarState extends State<CustomTabBar> {
         });
   }
 
-  // --- UI DAN LOGIKA TAB BAR ---
+  // =================================================================
+  // 🎨 UI DAN FLOATING BUTTON
+  // =================================================================
 
   @override
   Widget build(BuildContext context) {
-    // Memastikan tab kembali ke Dashboard jika logout terjadi saat berada di tab lain
     if (!_isLoggedIn && currentTab != 0) {
       currentTab = 0;
     }
@@ -153,15 +294,49 @@ class _CustomTabBarState extends State<CustomTabBar> {
         children: screens,
       ),
 
-      // Floating Play Button
+      // 🎶 Floating Play Button -> Sound Selection Pop Up
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xff3D447C),
         elevation: 6,
         shape: const CircleBorder(),
         onPressed: () {
-          // Aksi untuk tombol putar/play
+          if (_isLoadingSounds) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Memuat daftar sound...')),
+            );
+          } else if (_allSounds.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Tidak ada sound yang tersedia.')),
+            );
+          } else {
+            // Tampilkan PopUp Dialog Sound Selection
+            showDialog(
+              context: context,
+              builder: (BuildContext dialogContext) {
+                return SoundSelectionDialog(
+                  initialSounds: _allSounds
+                      .map((s) => s.copyWith())
+                      .toList(), // Kirim salinan
+                  onSelectionConfirmed: _handleSelectionConfirmed,
+                );
+              },
+            );
+          }
         },
-        child: const Icon(Icons.play_arrow, size: 36, color: Colors.white),
+        child: _isLoadingSounds
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : const Icon(
+                Icons.music_note_rounded,
+                size: 36,
+                color: Colors.white,
+              ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
@@ -189,12 +364,9 @@ class _CustomTabBarState extends State<CustomTabBar> {
 
   // Fungsi pembangun untuk setiap tombol tab
   Widget _buildTabButton(IconData icon, int index) {
-    // Cek apakah tab dibatasi: Membutuhkan login DAN pengguna belum login
     final bool isRestricted = requiresLogin.contains(index) && !_isLoggedIn;
-
     bool isActive = currentTab == index;
 
-    // Tentukan warna ikon dan latar belakang berdasarkan status
     Color iconColor = isActive
         ? Colors.white
         : (isRestricted ? Colors.grey.shade700 : Colors.grey);
@@ -206,11 +378,9 @@ class _CustomTabBarState extends State<CustomTabBar> {
       minWidth: 40,
       onPressed: isRestricted
           ? () {
-              // ⛔ Jika Dibatasi, tampilkan PopUp
               PopUp.show(context);
             }
           : () {
-              // ✅ Jika Diizinkan (sudah login atau tab Dashboard), ganti tab
               setState(() {
                 currentTab = index;
               });
@@ -225,5 +395,15 @@ class _CustomTabBarState extends State<CustomTabBar> {
         child: Icon(icon, color: iconColor, size: 28),
       ),
     );
+  }
+}
+
+// Extension sederhana untuk memudahkan pencarian (Opsional, tapi membantu)
+extension ListExtension<E> on List<E> {
+  E? firstWhereOrNull(bool Function(E element) test) {
+    for (E element in this) {
+      if (test(element)) return element;
+    }
+    return null;
   }
 }
