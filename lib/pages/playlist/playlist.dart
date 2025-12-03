@@ -22,6 +22,9 @@ class _PlaylistState extends State<Playlist> {
     _fetchPlaylists();
   }
 
+  // ===================================
+  // FUNGSI 1: READ (Ambil/Fetch) Playlist
+  // ===================================
   Future<void> _fetchPlaylists() async {
     try {
       final user = _supabase.auth.currentUser;
@@ -51,6 +54,9 @@ class _PlaylistState extends State<Playlist> {
     }
   }
 
+  // ===================================
+  // FUNGSI 2: CREATE (Buat) Playlist
+  // ===================================
   Future<void> _createPlaylist() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
@@ -58,7 +64,6 @@ class _PlaylistState extends State<Playlist> {
     final TextEditingController nameController = TextEditingController();
 
     // Dialog untuk input nama playlist baru
-    // Menggunakan showGeneralDialog agar lebih mudah kustomisasi style-nya
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -167,6 +172,9 @@ class _PlaylistState extends State<Playlist> {
     );
   }
 
+  // ===================================
+  // FUNGSI 3: UPDATE (Edit Nama) Playlist
+  // ===================================
   Future<void> _editPlaylist(Map<String, dynamic> playlist) async {
     final TextEditingController controller = TextEditingController(
       text: playlist['nama_playlist'] ?? '',
@@ -231,6 +239,9 @@ class _PlaylistState extends State<Playlist> {
     );
   }
 
+  // ===================================
+  // FUNGSI 4: DELETE (Hapus) Playlist
+  // ===================================
   Future<void> _deletePlaylist(String id) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -268,20 +279,24 @@ class _PlaylistState extends State<Playlist> {
     if (confirm != true) return;
 
     try {
-      // Supabase biasanya akan menangani penghapusan cascade pada 'playlist_sound'
+      // Supabase: Hapus playlist berdasarkan ID
       await _supabase.from('playlist').delete().eq('id', id);
 
       if (mounted) {
+        // Update state lokal untuk menghapus item dari tampilan
         setState(() {
           _playlists.removeWhere((p) => p['id'] == id);
         });
       }
     } catch (e) {
       debugPrint('Error deleting playlist: $e');
-      if (mounted) {}
+      // Anda bisa menampilkan SnackBar di sini jika terjadi error
     }
   }
 
+  // ===================================
+  // Widget Build (Tampilan)
+  // ===================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -366,8 +381,9 @@ class _PlaylistState extends State<Playlist> {
 
                         return GestureDetector(
                           // --- LOGIKA NAVIGASI KE DETAIL PLAYLIST ---
-                          onTap: () {
-                            Navigator.push(
+                          onTap: () async {
+                            // Menunggu halaman detail selesai
+                            await Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (context) => PlaylistDetailPage(
@@ -376,6 +392,8 @@ class _PlaylistState extends State<Playlist> {
                                 ),
                               ),
                             );
+                            // Refresh playlist setelah kembali dari detail
+                            _fetchPlaylists();
                           },
                           // ------------------------------------------
                           child: Container(
@@ -425,7 +443,7 @@ class _PlaylistState extends State<Playlist> {
                                     ],
                                   ),
                                 ),
-                                // Tombol Popup
+                                // Tombol Popup (Edit & Hapus)
                                 PopupMenuButton<String>(
                                   // Menghentikan onTap dari GestureDetector di bawahnya saat ikon ditekan
                                   onSelected: (value) async {

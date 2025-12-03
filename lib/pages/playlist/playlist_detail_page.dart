@@ -85,7 +85,6 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         return AudioSource.uri(Uri.parse(s.audioUrl), tag: s.title);
       }).toList();
 
-      // 🌟 PERBAIKAN DI SINI: useLooping dihapus 🌟
       final ConcatenatingAudioSource playlistSource = ConcatenatingAudioSource(
         children: audioSources,
       );
@@ -100,7 +99,6 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     }
   }
 
-  // ⏸️ FUNGSI BARU: MENJEDA SEMUA SOUND DALAM PLAYLIST
   void _pauseAllSounds() async {
     await _audioManager.player.pause();
   }

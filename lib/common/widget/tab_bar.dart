@@ -112,7 +112,7 @@ class _CustomTabBarState extends State<CustomTabBar> {
   }
 
   // =================================================================
-  // 🎙️ LOGIKA AUDIO & DATA
+  //  LOGIKA AUDIO & DATA
   // =================================================================
 
   Future<void> _fetchAllSounds() async {
@@ -150,15 +150,15 @@ class _CustomTabBarState extends State<CustomTabBar> {
 
   // --- HANDLER SELECTION DARI POPUP/GRID ---
   void _handleSelectionConfirmed(List<Sound> updatedSounds) {
-    const int MAX_SOUNDS = AudioManager.MAX_MIXED_SOUNDS; // Batas 3
+    const int maxSounds = AudioManager.MAX_MIXED_SOUNDS; // Batas 3
     final selectedMixedSounds = updatedSounds
         .where((s) => s.isSelected && s.id != _defaultBackgroundSoundId)
         .toList();
 
     // 1. Terapkan Batas 3 Sound Campuran
-    if (selectedMixedSounds.length > MAX_SOUNDS) {
+    if (selectedMixedSounds.length > maxSounds) {
       // Nonaktifkan sound ke-4 dan seterusnya
-      for (int i = MAX_SOUNDS; i < selectedMixedSounds.length; i++) {
+      for (int i = maxSounds; i < selectedMixedSounds.length; i++) {
         selectedMixedSounds[i].isSelected = false;
         _stopAudio(selectedMixedSounds[i].id);
       }

@@ -1,5 +1,6 @@
 import 'package:just_audio/just_audio.dart';
-import 'package:flutter/foundation.dart'; // Digunakan untuk debugPrint
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart'; // Tambahkan ini jika Anda menggunakan @mustCallSuper
 
 class AudioManager {
   AudioManager._internal();
@@ -15,6 +16,9 @@ class AudioManager {
   // Map untuk multi-sound (sound campuran: soundId -> AudioPlayer)
   final Map<String, AudioPlayer> _players = {};
 
+  // Getter untuk mengakses semua player campuran (digunakan untuk kontrol global/mute)
+  Map<String, AudioPlayer> get players => _players;
+
   AudioPlayer getPlayer(String soundId) {
     if (!_players.containsKey(soundId)) {
       _players[soundId] = AudioPlayer();
@@ -24,26 +28,59 @@ class AudioManager {
   }
 
   // -------------------------------------------------------------------
-  // --- KONTROL GLOBAL (Untuk SoundPlayer/Mini Player) ---
+  // --- KONTROL GLOBAL (Mempengaruhi Player Utama dan Mixed Sounds) ---
   // -------------------------------------------------------------------
 
-  // 🆕 Metode untuk PAUSE SEMUA AUDIO (Lagu Tunggal + Campuran)
-  Future<void> pauseAll() async {
-    // Pause player default (Lagu Tunggal/Playlist)
+  // Cek Status Global (Gabungan player utama dan campuran)
+  bool get isAnyAudioPlaying {
+    // 1. Cek player default
     if (player.playing) {
-      await player.pause();
+      return true;
     }
+    // 2. Cek semua player campuran
+    for (var p in _players.values) {
+      if (p.playing) {
+        return true;
+      }
+    }
+    return false;
+  }
 
+  // Metode untuk PAUSE SEMUA AUDIO (Lagu Tunggal + Campuran)
+  Future<void> pauseAll() async {
+    final futures = <Future>[];
+    // Pause player default
+    if (player.playing) {
+      futures.add(player.pause());
+    }
     // Pause semua player campuran
     for (var p in _players.values) {
       if (p.playing) {
-        await p.pause();
+        futures.add(p.pause());
       }
     }
+    await Future.wait(futures);
     debugPrint('GLOBAL CONTROL: Semua audio di-pause.');
   }
 
-  // 🆕 Metode untuk PAUSE SEMUA AUDIO CAMPURAN SAJA (PENTING untuk Playlist)
+  // Metode untuk PLAY SEMUA AUDIO (Lagu Tunggal + Campuran)
+  Future<void> playAll() async {
+    final futures = <Future>[];
+    // Play player default
+    if (player.processingState != ProcessingState.idle && !player.playing) {
+      futures.add(player.play());
+    }
+    // Play semua player campuran yang aktif
+    for (var p in _players.values) {
+      if (p.processingState != ProcessingState.idle && !p.playing) {
+        futures.add(p.play());
+      }
+    }
+    await Future.wait(futures);
+    debugPrint('GLOBAL CONTROL: Semua audio di-play.');
+  }
+
+  // Metode untuk PAUSE SEMUA AUDIO CAMPURAN SAJA (Digunakan oleh PlaylistDetailPage)
   Future<void> pauseAllMixedSounds() async {
     final futures = <Future>[];
     for (var p in _players.values) {
@@ -53,38 +90,6 @@ class AudioManager {
     }
     await Future.wait(futures);
     debugPrint('MIXED CONTROL: Semua mixed sounds di-pause.');
-  }
-
-  // 🆕 Metode untuk PLAY SEMUA AUDIO (Lagu Tunggal + Campuran)
-  Future<void> playAll() async {
-    // Play player default (Lagu Tunggal/Playlist), jika sudah di-set
-    if (player.processingState != ProcessingState.idle && !player.playing) {
-      await player.play();
-    }
-
-    // Play semua player campuran yang aktif
-    for (var p in _players.values) {
-      if (p.processingState != ProcessingState.idle && !p.playing) {
-        await p.play();
-      }
-    }
-    debugPrint('GLOBAL CONTROL: Semua audio di-play.');
-  }
-
-  bool get isAnyAudioPlaying {
-    // 1. Cek player default
-    if (player.playing) {
-      return true;
-    }
-
-    // 2. Cek semua player campuran
-    for (var p in _players.values) {
-      if (p.playing) {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   // -------------------------------------------------------------------
@@ -116,7 +121,7 @@ class AudioManager {
     await p.setVolume(volume);
 
     if (!p.playing) {
-      // ⚠️ PENTING: Jika ada lagu/playlist di player default, hentikan dulu
+      // PENTING: Jika ada lagu/playlist di player default, hentikan dulu
       if (player.playing) {
         await player.stop();
         debugPrint(

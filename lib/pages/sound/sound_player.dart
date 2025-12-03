@@ -1,6 +1,7 @@
 import 'package:calm_wave/pages/sound/audio_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:just_audio/just_audio.dart'; // Import just_audio untuk StreamBuilder
 
 class SoundPlayer extends StatefulWidget {
   final String? audioUrl;
@@ -16,9 +17,11 @@ class _SoundPlayerState extends State<SoundPlayer> {
   final AudioManager _audioManager = AudioManager.instance;
   final supabase = Supabase.instance.client;
 
-  bool isPlaying = false;
-  bool isMuted = false;
+  // Variabel state hanya untuk Volume/Mute
   double volume = 0.5;
+  bool isMuted = false;
+
+  // 💡 Catatan: Variabel isPlaying Dihapus, diganti StreamBuilder.
 
   @override
   void initState() {
@@ -30,12 +33,12 @@ class _SoundPlayerState extends State<SoundPlayer> {
   void didUpdateWidget(covariant SoundPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // 🌟 MEMAKSA MEMUTAR AUDIO BARU 🌟
+    // MEMAKSA MEMUTAR AUDIO BARU
     if (widget.audioUrl != null && widget.audioUrl != oldWidget.audioUrl) {
       _audioManager.player.stop();
       _audioManager.player.setUrl(widget.audioUrl!).then((_) {
+        // Setelah URL baru di-set, mulai putar.
         _audioManager.player.play();
-        // isPlaying akan diperbarui oleh listener di bawah
       });
     }
   }
@@ -48,21 +51,20 @@ class _SoundPlayerState extends State<SoundPlayer> {
         await _audioManager.player.setUrl(widget.audioUrl!);
       }
 
-      // 🌟 MEMAKSA PLAY (Jika tidak sedang bermain) 🌟
+      // MEMAKSA PLAY PLAYER UTAMA (Jika tidak sedang bermain)
       if (!_audioManager.player.playing) {
         await _audioManager.player.play();
       }
 
-      setState(() {
-        isPlaying = _audioManager.player.playing;
-        volume = _audioManager.player.volume;
-        isMuted = volume == 0;
-      });
+      // Inisialisasi state awal (untuk slider dan mute)
+      if (mounted) {
+        setState(() {
+          volume = _audioManager.player.volume;
+          isMuted = volume == 0;
+        });
+      }
 
-      _audioManager.player.playingStream.listen((playing) {
-        if (mounted) setState(() => isPlaying = playing);
-      });
-
+      // Listener Volume (tetap dipertahankan)
       _audioManager.player.volumeStream.listen((v) {
         if (mounted) {
           setState(() {
@@ -71,38 +73,54 @@ class _SoundPlayerState extends State<SoundPlayer> {
           });
         }
       });
+
+      // 💡 Catatan: playingStream listener Dihapus, diganti StreamBuilder.
     } catch (e) {
       debugPrint("Gagal memuat audio: $e");
     }
   }
 
+  // 🔄 FUNGSI TOGGLE PLAY/PAUSE (KONTROL GLOBAL)
   Future<void> _togglePlay() async {
-    // Memeriksa status global untuk Global Pause/Play
+    // Logika: Jika ADA sound apapun yang sedang dimainkan (utama ATAU campuran),
+    // maka tombol ini berarti PAUSE GLOBAL.
     if (_audioManager.isAnyAudioPlaying) {
-      await _audioManager.pauseAll();
+      await _audioManager.pauseAll(); // Pause player utama + semua mixed sound
     } else {
-      await _audioManager.playAll();
+      // Jika TIDAK ADA sound yang dimainkan, maka tombol ini berarti PLAY GLOBAL.
+      await _audioManager
+          .playAll(); // Play player utama + semua mixed sound yang paused
     }
 
-    setState(() {
-      isPlaying = _audioManager.player.playing;
-    });
+    // UI Play/Pause akan diperbarui secara otomatis oleh StreamBuilder.
   }
 
   Future<void> _toggleMute() async {
     // Logika Mute yang diperbarui untuk mempertahankan volume terakhir
     final newMuted = !isMuted;
 
+    // Dapatkan semua player (player utama + semua player campuran)
+    final allPlayers = [_audioManager.player, ..._audioManager.players.values];
+
+    // Simpan volume terakhir dari player utama
+    final lastVolume = volume > 0 ? volume : 0.5;
+
+    final futures = <Future>[];
     if (newMuted) {
-      // Mute
-      await _audioManager.player.setVolume(0);
+      // Mute SEMUA
+      for (var p in allPlayers) {
+        futures.add(p.setVolume(0));
+      }
     } else {
-      // Unmute: kembali ke volume terakhir atau 0.5
-      final targetVolume = volume > 0 ? volume : 0.5;
-      await _audioManager.player.setVolume(targetVolume);
+      // Unmute: Player utama kembali ke volume terakhir, player campuran di-unmute jika sedang bermain
+      futures.add(_audioManager.player.setVolume(lastVolume));
+      // Logika untuk player campuran mungkin perlu diatur di AudioManager agar mempertahankan volume per player.
+      // Untuk simplifikasi, kita asumsikan player utama yang dikontrol mute-nya di sini
     }
 
-    // setState akan dipicu oleh volumeStream listener, tapi tetap jaga untuk kepastian UI
+    await Future.wait(futures);
+
+    // setState akan dipicu oleh volumeStream listener player utama, tapi kita pastikan volume global
     setState(() => isMuted = newMuted);
   }
 
@@ -110,9 +128,11 @@ class _SoundPlayerState extends State<SoundPlayer> {
   Future<void> _showPlaylistBottomSheet() async {
     final user = supabase.auth.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Harap login terlebih dahulu.')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Harap login terlebih dahulu.')),
+        );
+      }
       return;
     }
 
@@ -157,7 +177,11 @@ class _SoundPlayerState extends State<SoundPlayer> {
                 const SizedBox(height: 20),
 
                 InkWell(
-                  onTap: _showCreatePlaylistSheet,
+                  onTap: () {
+                    // Tutup BottomSheet saat ini sebelum membuka yang baru
+                    Navigator.pop(context);
+                    _showCreatePlaylistSheet();
+                  },
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -196,7 +220,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
                         return InkWell(
                           onTap: () async {
                             await _addSoundToPlaylist(
-                              playlistId: playlist['id'].toString(), // FIXED
+                              playlistId: playlist['id'].toString(),
                               playlistName: playlist['nama_playlist'],
                             );
                           },
@@ -301,9 +325,9 @@ class _SoundPlayerState extends State<SoundPlayer> {
                   });
 
                   if (context.mounted) {
-                    Navigator.pop(context);
-                    Navigator.pop(context);
-                    _showPlaylistBottomSheet();
+                    Navigator.pop(context); // Tutup Buat Playlist
+                    Navigator.pop(context); // Tutup Pilih Playlist
+                    _showPlaylistBottomSheet(); // Muat ulang list playlist
                   }
                 },
                 child: const Text(
@@ -324,7 +348,7 @@ class _SoundPlayerState extends State<SoundPlayer> {
     required String playlistName,
   }) async {
     try {
-      final soundId = widget.soundId?.toString(); // FIXED
+      final soundId = widget.soundId?.toString();
       if (soundId == null) return;
 
       final existing = await supabase
@@ -335,13 +359,15 @@ class _SoundPlayerState extends State<SoundPlayer> {
           .maybeSingle();
 
       if (existing != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Sound sudah ada di playlist "$playlistName".'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        if (context.mounted) Navigator.pop(context);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Sound sudah ada di playlist "$playlistName".'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          Navigator.pop(context);
+        }
         return;
       }
 
@@ -350,27 +376,30 @@ class _SoundPlayerState extends State<SoundPlayer> {
         'id_sounds': soundId,
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Berhasil ditambahkan ke "$playlistName"'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Berhasil ditambahkan ke "$playlistName"'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context);
+      }
     } catch (e) {
       debugPrint("Gagal menambah sound ke playlist: $e");
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Gagal menambahkan sound.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal menambahkan sound.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
-  // UI MINI PLAYER (Tidak ada perubahan)
+  // UI MINI PLAYER (Menggunakan StreamBuilder untuk ikon Play/Pause)
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -383,15 +412,31 @@ class _SoundPlayerState extends State<SoundPlayer> {
       ),
       child: Row(
         children: [
-          IconButton(
-            onPressed: _togglePlay,
-            icon: Icon(
-              isPlaying ? Icons.pause : Icons.play_arrow,
-              color: Colors.white,
-              size: 30,
-            ),
+          // 🎯 StreamBuilder untuk Ikon Play/Pause
+          StreamBuilder<PlayerState>(
+            stream: _audioManager.player.playerStateStream,
+            builder: (context, snapshot) {
+              final playerState = snapshot.data;
+              final playing = playerState?.playing ?? false;
+              final processingState = playerState?.processingState;
+
+              // Cek status global: apakah player utama atau player campuran sedang bermain
+              // Karena tombol ini adalah GLOBAL TOGGLE, kita bisa cek status isAnyAudioPlaying
+              final bool isPlayingGlobally = _audioManager.isAnyAudioPlaying;
+
+              // Tentukan ikon: tampilkan pause jika ada audio yang bermain secara global
+              final IconData icon = isPlayingGlobally
+                  ? Icons.pause
+                  : Icons.play_arrow;
+
+              return IconButton(
+                onPressed: _togglePlay, // Memanggil Kontrol Global
+                icon: Icon(icon, color: Colors.white, size: 30),
+              );
+            },
           ),
 
+          // Akhir StreamBuilder
           const SizedBox(width: 8),
 
           IconButton(
@@ -408,7 +453,10 @@ class _SoundPlayerState extends State<SoundPlayer> {
               inactiveColor: Colors.white24,
               value: isMuted ? 0 : volume,
               onChanged: (value) async {
+                // Set volume hanya pada player utama
                 await _audioManager.player.setVolume(value);
+                // Set volume pada mixed sounds, jika diperlukan, dapat ditambahkan di sini
+                // atau ditangani melalui stream listener di mixed sounds.
                 setState(() {
                   volume = value;
                   isMuted = value == 0;

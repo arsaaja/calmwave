@@ -9,10 +9,10 @@ class SoundSelectionDialog extends StatefulWidget {
   final Function(List<Sound> selectedSounds) onSelectionConfirmed;
 
   const SoundSelectionDialog({
-    Key? key,
+    super.key,
     required this.initialSounds,
     required this.onSelectionConfirmed,
-  }) : super(key: key);
+  });
 
   @override
   _SoundSelectionDialogState createState() => _SoundSelectionDialogState();
