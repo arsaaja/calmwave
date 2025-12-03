@@ -34,6 +34,7 @@ class _PlaylistState extends State<Playlist> {
       }
 
       // Ambil playlist pengguna dan hitung jumlah sound melalui tabel pivot
+      // Menggunakan `count` di tabel relasi (playlist_sound)
       final response = await _supabase
           .from('playlist')
           .select('*, playlist_sound(count)')
@@ -216,15 +217,19 @@ class _PlaylistState extends State<Playlist> {
                 final newName = controller.text.trim();
                 if (newName.isEmpty) return;
 
-                await _supabase
-                    .from('playlist')
-                    .update({'nama_playlist': newName})
-                    .eq('id', playlist['id']);
+                try {
+                  await _supabase
+                      .from('playlist')
+                      .update({'nama_playlist': newName})
+                      .eq('id', playlist['id']);
 
-                // Update state secara lokal agar UI langsung berubah tanpa fetch ulang
-                setState(() {
-                  playlist['nama_playlist'] = newName;
-                });
+                  // Update state secara lokal agar UI langsung berubah tanpa fetch ulang
+                  setState(() {
+                    playlist['nama_playlist'] = newName;
+                  });
+                } catch (e) {
+                  debugPrint('Error updating playlist name: $e');
+                }
 
                 if (context.mounted) Navigator.pop(context);
               },
@@ -240,7 +245,7 @@ class _PlaylistState extends State<Playlist> {
   }
 
   // ===================================
-  // FUNGSI 4: DELETE (Hapus) Playlist
+  // FUNGSI 4: DELETE (Hapus) Playlist (Kode yang Anda Minta)
   // ===================================
   Future<void> _deletePlaylist(String id) async {
     final confirm = await showDialog<bool>(
@@ -253,7 +258,7 @@ class _PlaylistState extends State<Playlist> {
             style: TextStyle(color: Colors.white),
           ),
           content: const Text(
-            'Yakin ingin menghapus playlist ini? Ini akan menghapus semua sound di dalamnya.',
+            'Yakin ingin menghapus playlist ini? Tindakan ini tidak dapat dibatalkan.',
             style: TextStyle(color: Colors.white70),
           ),
           actions: [
@@ -279,7 +284,12 @@ class _PlaylistState extends State<Playlist> {
     if (confirm != true) return;
 
     try {
-      // Supabase: Hapus playlist berdasarkan ID
+      // PENTING: Jika Anda TIDAK menggunakan ON DELETE CASCADE di Supabase:
+      // Anda HARUS menghapus entri di playlist_sound terlebih dahulu:
+      // await _supabase.from('playlist_sound').delete().eq('id_playlist', id);
+
+      // Supabase: Hapus playlist berdasarkan ID dari tabel 'playlist'.
+      // Jika CASCADE aktif, ini akan otomatis menghapus di 'playlist_sound'.
       await _supabase.from('playlist').delete().eq('id', id);
 
       if (mounted) {
@@ -290,7 +300,15 @@ class _PlaylistState extends State<Playlist> {
       }
     } catch (e) {
       debugPrint('Error deleting playlist: $e');
-      // Anda bisa menampilkan SnackBar di sini jika terjadi error
+      // Tampilkan error message jika perlu
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal menghapus playlist. Coba lagi.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -450,7 +468,10 @@ class _PlaylistState extends State<Playlist> {
                                     if (value == 'edit') {
                                       _editPlaylist(playlist);
                                     } else if (value == 'delete') {
-                                      _deletePlaylist(playlist['id']);
+                                      // Memanggil fungsi hapus
+                                      _deletePlaylist(
+                                        playlist['id'].toString(),
+                                      );
                                     }
                                   },
                                   color: const Color(
