@@ -76,22 +76,16 @@ class _TimerState extends State<Timer> {
     });
   }
 
-  void _onTimerComplete() {
-    if (_audioManager.player.playing) {
-      _audioManager.player.pause();
-    }
+  // 🎯 PERUBAHAN KRUSIAL: Menggunakan pauseAll() untuk menghentikan SEMUA audio (global)
+  void _onTimerComplete() async {
+    // Panggil metode GLOBAL untuk menjeda player utama DAN semua mixed sounds
+    await _audioManager.pauseAll();
+
     setState(() {
       _isRunning = false;
       _isPaused = false;
       _duration = 0;
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Waktu habis! Audio telah dijeda.'),
-        backgroundColor: Color(0xFF535C91),
-      ),
-    );
   }
 
   @override
@@ -131,7 +125,7 @@ class _TimerState extends State<Timer> {
               Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFF161E54),
-                  borderRadius: BorderRadius.circular(5),
+                  borderRadius: BorderRadius.circular(10), // Sedikit diperbesar
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: TextField(
@@ -139,6 +133,8 @@ class _TimerState extends State<Timer> {
                   keyboardType: TextInputType.number,
                   enabled: !_isRunning,
                   textAlign: TextAlign.center,
+                  onChanged: (_) =>
+                      setState(() {}), // Update text di bawah TextField
                   decoration: const InputDecoration(
                     border: InputBorder.none,
                     hintText: "Masukkan waktu (menit)",
@@ -149,7 +145,7 @@ class _TimerState extends State<Timer> {
               ),
               const SizedBox(height: 16),
               Text(
-                "Adjust Time: ${_inputController.text.isEmpty ? 0 : _inputController.text} minutes",
+                "Waktu yang diatur: ${_inputController.text.isEmpty ? 0 : _inputController.text} menit",
                 style: const TextStyle(color: Colors.white70),
               ),
               const SizedBox(height: 40),
@@ -179,7 +175,7 @@ class _TimerState extends State<Timer> {
                 ElevatedButton.icon(
                   onPressed: _startTimer,
                   icon: const Icon(Icons.play_arrow),
-                  label: const Text("Start Timer"),
+                  label: const Text("Mulai Timer"),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF535C91),
                     foregroundColor: Colors.white,

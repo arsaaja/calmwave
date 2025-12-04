@@ -1,6 +1,7 @@
 import 'package:calm_wave/common/widget/custom_appbar.dart';
 import 'package:calm_wave/models/sound_model.dart';
 import 'package:calm_wave/pages/sound/audio_manager.dart';
+import 'package:calm_wave/common/widget/sound_selection.dart'; // PASTI KAN PATH INI BENAR!
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -21,7 +22,6 @@ class PlaylistDetailPage extends StatefulWidget {
 
 class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   final SupabaseClient _supabase = Supabase.instance.client;
-  // Pastikan AudioManager memiliki fungsi pauseAllMixedSounds()
   final AudioManager _audioManager = AudioManager.instance;
   List<Sound> _sounds = [];
   bool _isLoading = true;
@@ -32,7 +32,9 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     _fetchPlaylistSounds();
   }
 
-  // 📝 FUNGSI FETCH DATA DARI SUPABASE
+  // ===============================================
+  // 📝 FUNGSI 1: FETCH SOUND YANG SUDAH ADA DI PLAYLIST
+  // ===============================================
   Future<void> _fetchPlaylistSounds() async {
     setState(() => _isLoading = true);
     try {
@@ -60,7 +62,136 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     }
   }
 
-  // 🎧 FUNGSI MEMUTAR SEMUA SOUND DALAM PLAYLIST SECARA BERURUTAN (DIREVISI)
+  // ===============================================
+  // 📝 FUNGSI 2: AMBIL SEMUA SOUND YANG TERSEDIA
+  // ===============================================
+  Future<List<Sound>> _fetchAllAvailableSounds() async {
+    try {
+      // Ambil semua sound dari tabel 'sounds'
+      final response = await _supabase.from('sounds').select('*');
+
+      // Konversi data Supabase ke List<Sound>
+      final allSounds = response
+          .map((item) => Sound.fromJson(item as Map<String, dynamic>))
+          .toList();
+
+      // Tandai sound yang sudah ada di playlist sebagai isSelected=true
+      final currentSoundIds = _sounds.map((s) => s.id).toSet();
+
+      for (var sound in allSounds) {
+        sound.isSelected = currentSoundIds.contains(sound.id);
+      }
+      return allSounds;
+    } catch (e) {
+      debugPrint('Error fetching all available sounds: $e');
+      return [];
+    }
+  }
+
+  // ===============================================
+  // 📝 FUNGSI 3: TAMBAH SOUND YANG DIPILIH KE SUPABASE
+  // ===============================================
+  Future<void> _addSelectedSoundsToPlaylist(
+    List<String> selectedSoundIds,
+  ) async {
+    // 1. Ambil ID sound yang baru ditambahkan (yaitu yang dipilih TAPI belum ada di playlist)
+    final Set<String> currentSoundIds = _sounds.map((s) => s.id).toSet();
+    final List<String> soundsToAdd = selectedSoundIds
+        .where((id) => !currentSoundIds.contains(id))
+        .toList();
+
+    // 2. Buat list data untuk di-insert ke tabel pivot
+    final List<Map<String, dynamic>> inserts = soundsToAdd
+        .map(
+          (soundId) => {'id_playlist': widget.playlistId, 'id_sounds': soundId},
+        )
+        .toList();
+
+    // 3. Ambil ID sound yang dihapus (yaitu yang sudah ada di playlist TAPI tidak dipilih lagi)
+    final List<String> soundsToRemove = currentSoundIds
+        .where((id) => !selectedSoundIds.contains(id))
+        .toList();
+
+    try {
+      // --- HAPUS ---
+      if (soundsToRemove.isNotEmpty) {
+        await _supabase
+            .from('playlist_sound')
+            .delete()
+            .eq('id_playlist', widget.playlistId)
+            // Hapus semua id_sounds yang ada di soundsToRemove
+            .inFilter('id_sounds', soundsToRemove);
+      }
+
+      // --- TAMBAH ---
+      if (inserts.isNotEmpty) {
+        await _supabase.from('playlist_sound').insert(inserts);
+      }
+
+      // 4. Refresh daftar sound setelah operasi selesai
+      await _fetchPlaylistSounds();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Playlist berhasil diperbarui! Ditambah: ${inserts.length}, Dihapus: ${soundsToRemove.length}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } on PostgrestException catch (e) {
+      debugPrint('Postgrest Error adding/removing sounds: ${e.message}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memperbarui playlist: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('General Error adding/removing sounds: $e');
+    }
+  }
+
+  // ===============================================
+  // ⚙️ FUNGSI 4: MENAMPILKAN DIALOG PEMILIHAN SOUND
+  // ===============================================
+  void _showAddSoundDialog() async {
+    // Ambil daftar sound yang tersedia dan yang sudah terpilih
+    final allSounds = await _fetchAllAvailableSounds();
+
+    if (allSounds.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tidak ada sound tersedia untuk ditambahkan.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (mounted) {
+      // Tampilkan dialog
+      showDialog(
+        context: context,
+        builder: (context) {
+          return SoundSelectionDialog(
+            initialSounds: allSounds,
+            onSelectionConfirmed: _addSelectedSoundsToPlaylist,
+          );
+        },
+      );
+    }
+  }
+
+  // (Fungsi _playAllSounds, _pauseAllSounds, _playSingleSound, _removeSoundFromPlaylist, _showSoundOptionsMenu tetap sama)
+  // ... (Fungsi Audio Playback yang tidak berubah) ...
+
   void _playAllSounds() async {
     if (_sounds.isEmpty) {
       return;
@@ -103,7 +234,6 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     await _audioManager.player.pause();
   }
 
-  // 🎧 FUNGSI MEMUTAR SATU SOUND (DIREVISI)
   void _playSingleSound(Sound sound) async {
     try {
       // 1. Hentikan semua player campuran (PENTING!)
@@ -122,12 +252,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     }
   }
 
-  // ❌ FUNGSI MENGHAPUS SOUND DARI PLAYLIST (Tidak Berubah)
   Future<void> _removeSoundFromPlaylist(
     String soundId,
     String soundTitle,
   ) async {
     try {
+      // Hapus sound dari tabel pivot
       await _supabase
           .from('playlist_sound')
           .delete()
@@ -135,6 +265,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           .eq('id_sounds', soundId);
 
       if (mounted) {
+        // Refresh daftar sound
         await _fetchPlaylistSounds();
       }
     } catch (e) {
@@ -142,7 +273,6 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     }
   }
 
-  // ⚙️ FUNGSI BARU: MENAMPILKAN POP UP OPSI SOUND (Tidak Berubah)
   void _showSoundOptionsMenu(Sound sound) {
     showDialog(
       context: context,
@@ -205,7 +335,9 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     );
   }
 
+  // ===============================================
   // 🎨 UI UTAMA
+  // ===============================================
   @override
   Widget build(BuildContext context) {
     const Color iconColor = Colors.white;
@@ -218,7 +350,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Playlist dan Tombol Play/Pause All (Menggunakan StreamBuilder)
+          // Header Playlist dan Tombol Play/Pause All
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 16.0,
@@ -251,19 +383,16 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                     final playerState = snapshot.data;
                     final playing = playerState?.playing ?? false;
 
-                    // Tentukan apakah player utama sedang memutar audio (bukan idle atau completed)
                     final bool isPlayingPlaylist =
                         playing &&
                         (playerState?.processingState !=
                             ProcessingState.completed) &&
                         (playerState?.processingState != ProcessingState.idle);
 
-                    // Tentukan fungsi yang akan dipanggil
                     final VoidCallback onPressedHandler = isPlayingPlaylist
                         ? _pauseAllSounds
                         : _playAllSounds;
 
-                    // Tentukan ikon yang akan ditampilkan
                     final IconData icon = isPlayingPlaylist
                         ? Icons.pause
                         : Icons.play_arrow;
@@ -285,7 +414,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           ),
           const Divider(color: Colors.white12, thickness: 1, height: 1),
 
-          // Daftar Sound (Tidak Berubah)
+          // Daftar Sound
           Expanded(
             child: _isLoading
                 ? const Center(
@@ -294,7 +423,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                 : ListView(
                     padding: const EdgeInsets.only(top: 8.0),
                     children: [
-                      _buildAddSoundItem(iconColor),
+                      // 💡 Panggil fungsi baru di onTap
+                      _buildAddSoundItem(iconColor, _showAddSoundDialog),
 
                       if (_sounds.isEmpty)
                         const Center(
@@ -311,9 +441,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                           return _SoundListItem(
                             sound: sound,
                             iconColor: iconColor,
-                            // KLIK ICON: Membuka Pop Up Opsi
                             onOptionsTap: () => _showSoundOptionsMenu(sound),
-                            // KLIK ITEM: Langsung Putar Sound
                             onSoundTap: () => _playSingleSound(sound),
                           );
                         }),
@@ -325,8 +453,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     );
   }
 
-  // Widget untuk tombol "Tambah Sound" (Tidak Berubah)
-  Widget _buildAddSoundItem(Color iconColor) {
+  // Widget untuk tombol "Tambah Sound"
+  Widget _buildAddSoundItem(Color iconColor, VoidCallback onTapHandler) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: ListTile(
@@ -349,7 +477,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           ),
         ),
         trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white54),
-        onTap: () {},
+        onTap: onTapHandler, // 💡 HUBUNGKAN KE FUNGSI BARU
       ),
     );
   }
@@ -358,6 +486,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
 // --- WIDGET ITEM DAFTAR SOUND (Tidak Berubah) ---
 
 class _SoundListItem extends StatelessWidget {
+  // ... (Widget ini tidak berubah) ...
   final Sound sound;
   final Color iconColor;
   final VoidCallback onOptionsTap;
@@ -372,6 +501,7 @@ class _SoundListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ... (Isi build method tidak berubah) ...
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: ListTile(

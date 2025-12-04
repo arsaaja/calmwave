@@ -1,31 +1,31 @@
-import 'package:calm_wave/models/sound_model.dart';
 import 'package:flutter/material.dart';
+import 'package:calm_wave/models/sound_model.dart'; // Pastikan path model SoundModel Anda benar
 
-class SoundSelectionDialog extends StatefulWidget {
-  // Menerima daftar Sound dengan status isSelected saat ini
+class SoundCombinationDialog extends StatefulWidget {
+  // Menerima daftar SoundItem dengan status isSelected dan volume saat ini
   final List<Sound> initialSounds;
 
-  // Callback diubah untuk mengembalikan List<String> (ID sound yang dipilih)
-  final Function(List<String> selectedSoundIds) onSelectionConfirmed;
+  // Callback untuk mengembalikan daftar SoundItem yang sudah diubah statusnya
+  final Function(List<Sound> selectedSounds) onSelectionConfirmed;
 
-  const SoundSelectionDialog({
+  const SoundCombinationDialog({
     super.key,
     required this.initialSounds,
     required this.onSelectionConfirmed,
   });
 
   @override
-  _SoundSelectionDialogState createState() => _SoundSelectionDialogState();
+  _SoundCombinationDialogState createState() => _SoundCombinationDialogState();
 }
 
-class _SoundSelectionDialogState extends State<SoundSelectionDialog> {
+class _SoundCombinationDialogState extends State<SoundCombinationDialog> {
   // Gunakan salinan untuk mengelola state di dialog tanpa memengaruhi data parent
   late List<Sound> _currentSounds;
 
   @override
   void initState() {
     super.initState();
-    // Salin objek, asumsi model Sound memiliki method copyWith() yang sederhana
+    // Salin objek, bukan hanya referensi
     _currentSounds = widget.initialSounds
         .map((item) => item.copyWith())
         .toList();
@@ -62,6 +62,7 @@ class _SoundSelectionDialogState extends State<SoundSelectionDialog> {
               },
               activeColor: Colors.blueAccent,
               checkColor: Colors.white,
+              // 🆕 Properti 'side' untuk mengubah warna border menjadi putih
               side: const BorderSide(
                 color: Colors.white, // Warna bingkai (border)
                 width: 2.0, // Ketebalan bingkai
@@ -73,7 +74,36 @@ class _SoundSelectionDialogState extends State<SoundSelectionDialog> {
               });
             },
           ),
-
+          // Tambahkan slider volume jika item dipilih
+          if (item.isSelected)
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.volume_down,
+                    color: Colors.white70,
+                    size: 18,
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: item.volume,
+                      min: 0.0,
+                      max: 1.0,
+                      divisions: 100,
+                      onChanged: (double value) {
+                        setState(() {
+                          item.volume = value;
+                        });
+                      },
+                      activeColor: const Color(0xFF9290C3),
+                      inactiveColor: Colors.white30,
+                    ),
+                  ),
+                  const Icon(Icons.volume_up, color: Colors.white70, size: 18),
+                ],
+              ),
+            ),
           const Divider(color: Colors.white12, height: 1),
         ],
       ),
@@ -114,13 +144,8 @@ class _SoundSelectionDialogState extends State<SoundSelectionDialog> {
         // Tombol Konfirmasi
         TextButton(
           onPressed: () {
-            // LOGIKA UTAMA: Filter dan Ambil ID
-            final List<String> selectedIds = _currentSounds
-                .where((item) => item.isSelected) // Filter yang terpilih
-                .map((item) => item.id) // Ambil properti ID saja
-                .toList();
-
-            widget.onSelectionConfirmed(selectedIds);
+            // Mengembalikan seluruh daftar SoundItem yang telah dimodifikasi
+            widget.onSelectionConfirmed(_currentSounds);
             Navigator.of(context).pop();
           },
           child: const Text(

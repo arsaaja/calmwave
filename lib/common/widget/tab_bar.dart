@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // Import komponen pendukung (Ganti path sesuai proyek Anda)
 import 'package:calm_wave/pages/sound/audio_manager.dart'; // AudioManager yang sudah dimodifikasi
 import 'package:calm_wave/models/sound_model.dart'; // Model Sound
-import 'package:calm_wave/common/widget/sound_selection.dart'; // SoundSelectionDialog
+import 'package:calm_wave/common/widget/sound_combination.dart'; // SoundSelectionDialog
 import 'package:calm_wave/pages/dashboard/dashboard.dart';
 import 'package:calm_wave/pages/playlist/playlist.dart';
 import 'package:calm_wave/pages/profile/profile.dart';
@@ -313,7 +313,7 @@ class _CustomTabBarState extends State<CustomTabBar> {
             showDialog(
               context: context,
               builder: (BuildContext dialogContext) {
-                return SoundSelectionDialog(
+                return SoundCombinationDialog(
                   initialSounds: _allSounds
                       .map((s) => s.copyWith())
                       .toList(), // Kirim salinan
